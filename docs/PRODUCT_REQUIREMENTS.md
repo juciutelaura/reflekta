@@ -253,6 +253,118 @@ Examples:
 * Uncertainty
 * Compassion
 
+
+Card-*
+
+## MVP Card Content
+
+For Phase 1, Reflekta uses six approved pilot cards.
+
+These cards are authoritative product content for the six-card MVP. Claude Code must not replace, rewrite, reinterpret, or invent their wisdom text. The seed data must reproduce the approved content exactly.
+
+### Card 1 — Stebėtojas
+
+**Theme:** Sąmoningumas
+
+**Wisdom text:**
+
+> Ne kiekviena mintis reikalauja tavo atsakymo. Kartais pirmas žingsnis yra pastebėti, kas vyksta tavo viduje, nebandant to pakeisti.
+
+**Reflection prompt:**
+
+> Ką pastebi savyje, kai tiesiog stebi savo mintis, jų nevertindamas?
+
+**Board position:** 0
+
+---
+
+### Card 2 — „Aš“
+
+**Theme:** Tapatybė
+
+**Wisdom text:**
+
+> Mes dažnai kalbame apie save taip, lyg jau tiksliai žinotume, kas esame. Tačiau dalis to, ką vadiname „aš“, gali būti istorijos, kurias apie save kartojame.
+
+**Reflection prompt:**
+
+> Kuri istorija apie save tau atrodo tokia pažįstama, kad retai ją kvestionuoji?
+
+**Board position:** 1
+
+---
+
+### Card 3 — Už durų
+
+**Theme:** Baimė
+
+**Wisdom text:**
+
+> Baimė dažnai kalba apie tai, kas gali nutikti. Tačiau kartais ji daugiau pasako apie tai, ką stengiamės apsaugoti.
+
+**Reflection prompt:**
+
+> Jeigu pažvelgtum už savo baimės — ką ji galbūt bando apsaugoti?
+
+**Board position:** 2
+
+---
+
+### Card 4 — Paleidimas
+
+**Theme:** Kontrolė
+
+**Wisdom text:**
+
+> Noras kontroliuoti gali suteikti saugumo jausmą. Tačiau ne viskas, kas vyksta tavo gyvenime, yra tavo rankose.
+
+**Reflection prompt:**
+
+> Ko šiandien labiausiai stengiesi kontroliuoti?
+
+**Board position:** 3
+
+---
+
+### Card 5 — Tarp
+
+**Theme:** Pokytis
+
+**Wisdom text:**
+
+> Pokytis ne visada prasideda nuo aiškaus sprendimo. Kartais pirmiausia atsiranda jausmas, kad tai, kas anksčiau tiko, nebetinka, nors dar nežinai, kas bus toliau.
+
+**Reflection prompt:**
+
+> Kas tavo gyvenime šiuo metu atrodo tarsi „tarp“ — tarp to, kas buvo, ir to, kas dar tik atsiranda?
+
+**Board position:** 4
+
+---
+
+### Card 6 — Nežinau
+
+**Theme:** Nežinomybė
+
+**Wisdom text:**
+
+> Nežinojimas gali atrodyti kaip problema, kurią reikia kuo greičiau išspręsti. Tačiau kartais atsakymo paieška per anksti neleidžia pamatyti to, kas dar tik formuojasi.
+
+**Reflection prompt:**
+
+> Kurioje savo gyvenimo vietoje tau sunkiausia pasakyti „aš dar nežinau“?
+
+**Board position:** 5
+
+### Content rules
+
+* These six cards are the approved Phase 1 pilot content.
+* Preserve the Lithuanian title, wisdom text, reflection prompt, theme, and board position exactly.
+* Do not generate alternative card copy unless explicitly instructed by the product owner.
+* Phase 1 contains six cards only.
+* Additional cards may be authored later and are not part of the current Phase 1 scope.
+
+
 ### CARD-004
 
 The system shall display the selected card to the user.
@@ -842,3 +954,5 @@ The goal is to determine whether the following experience is valuable:
 > **Intention → Unexpected card → Personal reflection → AI-guided exploration → New perspective**
 
 If that experience is valuable, additional AI engineering capabilities can be introduced around it over time.
+
+
