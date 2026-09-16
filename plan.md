@@ -877,7 +877,7 @@ dotnet test tests/Reflekta.Api.Tests --filter CardSeederTests
 
 Expected: PASS.
 
-- [ ] **Step 5: Run migrations and seed on startup**
+- [ ] **Step 5: Run migrations and seed on startup — but only against a relational provider**
 
 Modify `backend/src/Reflekta.Api/Program.cs` — replace `app.Run();` with:
 
@@ -885,12 +885,21 @@ Modify `backend/src/Reflekta.Api/Program.cs` — replace `app.Run();` with:
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<ReflektaDbContext>();
-    await dbContext.Database.MigrateAsync();
+
+    if (dbContext.Database.IsRelational())
+    {
+        await dbContext.Database.MigrateAsync();
+    }
+
     await CardSeeder.SeedAsync(dbContext);
 }
 
 app.Run();
 ```
+
+`Database.IsRelational()` is `true` for the real PostgreSQL provider (`docker compose` and local runs) and `false` for the EF Core InMemory provider used by tests (Task 5's `ReflektaWebApplicationFactory`). This guard is required, not cosmetic: the InMemory provider does not support relational migrations at all, and calling `MigrateAsync()` against it throws `InvalidOperationException` — it is not a no-op. `CardSeeder.SeedAsync` still runs unconditionally against both providers, since it only depends on `DbSet<Card>`, not on a migration having run.
+
+This guard is exercised by every `ReflektaWebApplicationFactory`-backed test from Task 5 onward: if the guard were missing or inverted, those tests would fail immediately at host startup with a relational-provider exception, before any test body runs — so a regression here is caught by the existing test suite, not just by inspection.
 
 - [ ] **Step 6: Commit**
 
@@ -1173,7 +1182,7 @@ public class ReflektaWebApplicationFactory : WebApplicationFactory<Program>
 }
 ```
 
-Note: because the in-memory database is process-local, this factory's `Program.MigrateAsync()` startup call (Task 4, Step 5) will run against `UseInMemoryDatabase`, and `MigrateAsync` is a no-op for the InMemory provider (it has no migration history) — the schema is created implicitly on first access. Seeding still runs normally.
+Note: `Program.cs`'s startup sequence (Task 4, Step 5) guards the `MigrateAsync()` call behind `Database.IsRelational()`, so it is skipped entirely when this factory's `UseInMemoryDatabase` context is active — the InMemory provider does not support relational migrations at all, and would throw if `MigrateAsync()` were called against it unconditionally. Its schema is created implicitly on first access, and `CardSeeder.SeedAsync` still runs normally against it.
 
 - [ ] **Step 9: Commit**
 
@@ -1680,6 +1689,8 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 
 ### Task 8: Frontend — Clerk auth, intention form, and journey/dice/card screen
 
+**Not final UX:** the screens built in this task (a plain form and a plain button, no visual design) are an intentionally minimal functional walking skeleton — they exist to prove the API integration end-to-end, not to reflect `docs/UX_FLOW.md`'s intended calm, guided, progressive experience. Visual design, copy, and interaction polish are out of scope for Phase 1 and belong to a later phase.
+
 **Files:**
 - Create: `frontend/src/lib/apiClient.ts`
 - Create: `frontend/src/pages/IntentionPage.tsx`
@@ -2107,9 +2118,10 @@ git status
 
 ## Self-Review Notes
 
-- **Spec coverage:** AUTH-001..005 (Task 5, 6, 7), INT-001..003/007 (Task 6), JRN-001..003/007 (Task 7), GAME-001..007 (Task 3, 7), CARD-001..007 (Task 4, 7), NFR-SEC-001..005 (Tasks 5-7 authorization tests), NFR-PRIV-001..002 (data isolation tests in Task 6-7). INT-004..006 (AI clarification), REF-*, AI-*, SAFE-*, CONV-*, SES-*, HIS-*, MEM-* are explicitly out of scope per Global Constraints and belong to later phases.
-- **Placeholder scan:** no TBD/TODO markers; every step has runnable code or an exact shell command.
+- **Spec coverage:** AUTH-001..005 (Task 5, 6, 7), INT-001..003/007 (Task 6), JRN-001..003/007 (Task 7), GAME-001..007 (Task 3, 7), CARD-001, 004..007 (Task 4, 7) satisfied structurally; CARD-002 ("authored reflection/wisdom content") is only structurally satisfied in Phase 1 — the seeded text is placeholder, not approved content, per Task 4's placeholder notice. NFR-SEC-001..005 (Tasks 5-7 authorization tests), NFR-PRIV-001..002 (data isolation tests in Task 6-7). INT-004..006 (AI clarification), REF-*, AI-*, SAFE-*, CONV-*, SES-*, HIS-*, MEM-* are explicitly out of scope per Global Constraints and belong to later phases.
+- **Placeholder scan:** no TBD/TODO markers in the instructions themselves — every step has runnable code or an exact shell command. Two things are intentionally and explicitly labeled non-final product/design decisions, not incomplete plan text: the six seed cards (Task 4) are placeholder content pending an authoritative source, and the board-wrap arithmetic (Task 3) is a temporary walking-skeleton mechanic pending the real Leela-inspired board design. Both are called out in place — including a code comment for the former — so neither is mistaken for an approved decision, and neither leaves any step ambiguous about what to actually implement.
 - **Type consistency:** `IntentionDto`, `JourneyDto`, `RollResultDto` field names and types are identical between backend records (Tasks 6-7) and frontend TypeScript interfaces (Task 8) — verified field-by-field (`cardThemes: string[]` ↔ `List<string> CardThemes`, `diceResult: number` ↔ `int DiceResult`, etc.).
+- **Corrections applied in this revision:** Task 2's step order now writes the failing test before any implementation exists (previously the implementation was written first and the "failing" run was not a real failure). Task 4/Program.cs's startup migration call is now guarded by `Database.IsRelational()` — the previous version unconditionally called `MigrateAsync()`, which throws against the EF Core InMemory provider used by every controller test from Task 5 onward; this was a real defect, not just a documentation gap, and would have made Tasks 6-9 fail outright.
 
 ---
 
