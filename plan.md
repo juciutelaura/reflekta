@@ -30,6 +30,8 @@
 - AI intention clarification (INT-004..006), the reflection facilitator, session summary, and journey history are **out of scope** for this plan.
 - Avoid `any` in TypeScript. Avoid unnecessary dependencies — every new package must earn its place.
 - Backend tests: xUnit. Frontend tests: Vitest + React Testing Library (TECH_STACK.md §17).
+- Explicitly out of scope for Phase 1 — do not add, even incidentally: the Python AI service, RAG, pgvector, long-term memory, MCP, additional/autonomous agents, automated Playwright E2E, AWS, Terraform, and any vector database. These remain future learning/implementation opportunities per `docs/TECH_STACK.md` and `docs/ARCHITECTURE.md`, not Phase 1 deliverables.
+- Execute this plan task-by-task with the required Superpowers skill (see the header), with a review checkpoint after each task. Do not collapse Phase 1 into one undivided implementation task.
 
 ---
 
@@ -278,7 +280,62 @@ cd ../../..
 dotnet tool install --global dotnet-ef --version 10.0.12 || dotnet tool update --global dotnet-ef --version 10.0.12
 ```
 
-- [ ] **Step 2: Write the entity models**
+- [ ] **Step 2: Write the failing persistence test**
+
+`backend/tests/Reflekta.Api.Tests/Data/ReflektaDbContextTests.cs`:
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using Reflekta.Api.Data;
+using Reflekta.Api.Models;
+using Xunit;
+
+namespace Reflekta.Api.Tests.Data;
+
+public class ReflektaDbContextTests
+{
+    [Fact]
+    public async Task SavesAndLoadsCardWithThemesAndBoardPosition()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var options = new DbContextOptionsBuilder<ReflektaDbContext>()
+            .UseInMemoryDatabase(dbName)
+            .Options;
+
+        var cardId = Guid.NewGuid();
+        using (var writeContext = new ReflektaDbContext(options))
+        {
+            writeContext.Cards.Add(new Card
+            {
+                Id = cardId,
+                Title = "Control",
+                WisdomText = "Notice where you try to hold on tightly.",
+                Themes = new List<string> { "Control", "Fear" },
+                BoardPosition = 3
+            });
+            await writeContext.SaveChangesAsync();
+        }
+
+        using var readContext = new ReflektaDbContext(options);
+        var loaded = await readContext.Cards.SingleAsync(c => c.Id == cardId);
+
+        Assert.Equal("Control", loaded.Title);
+        Assert.Equal(new List<string> { "Control", "Fear" }, loaded.Themes);
+        Assert.Equal(3, loaded.BoardPosition);
+    }
+}
+```
+
+- [ ] **Step 3: Run the test to verify it fails**
+
+```bash
+cd backend
+dotnet test tests/Reflekta.Api.Tests --filter ReflektaDbContextTests
+```
+
+Expected: FAIL to compile — `ReflektaDbContext`, `Card`, and the `Reflekta.Api.Data` / `Reflekta.Api.Models` namespaces the test references do not exist yet. This is a real failure caused by missing production code, not a simulated one.
+
+- [ ] **Step 4: Write the entity models**
 
 `backend/src/Reflekta.Api/Models/User.cs`:
 
@@ -365,7 +422,7 @@ public class PlayedCard
 }
 ```
 
-- [ ] **Step 3: Write the DbContext**
+- [ ] **Step 5: Write the DbContext**
 
 `backend/src/Reflekta.Api/Data/ReflektaDbContext.cs`:
 
@@ -418,7 +475,7 @@ public class ReflektaDbContext : DbContext
 }
 ```
 
-- [ ] **Step 4: Register the DbContext in `Program.cs`**
+- [ ] **Step 6: Register the DbContext in `Program.cs`**
 
 Add to `backend/src/Reflekta.Api/Program.cs`, right after `builder.Services.AddHealthChecks();`:
 
@@ -438,61 +495,6 @@ Add to `backend/src/Reflekta.Api/appsettings.json`:
   }
 }
 ```
-
-- [ ] **Step 5: Write the failing persistence test**
-
-`backend/tests/Reflekta.Api.Tests/Data/ReflektaDbContextTests.cs`:
-
-```csharp
-using Microsoft.EntityFrameworkCore;
-using Reflekta.Api.Data;
-using Reflekta.Api.Models;
-using Xunit;
-
-namespace Reflekta.Api.Tests.Data;
-
-public class ReflektaDbContextTests
-{
-    [Fact]
-    public async Task SavesAndLoadsCardWithThemesAndBoardPosition()
-    {
-        var dbName = Guid.NewGuid().ToString();
-        var options = new DbContextOptionsBuilder<ReflektaDbContext>()
-            .UseInMemoryDatabase(dbName)
-            .Options;
-
-        var cardId = Guid.NewGuid();
-        using (var writeContext = new ReflektaDbContext(options))
-        {
-            writeContext.Cards.Add(new Card
-            {
-                Id = cardId,
-                Title = "Control",
-                WisdomText = "Notice where you try to hold on tightly.",
-                Themes = new List<string> { "Control", "Fear" },
-                BoardPosition = 3
-            });
-            await writeContext.SaveChangesAsync();
-        }
-
-        using var readContext = new ReflektaDbContext(options);
-        var loaded = await readContext.Cards.SingleAsync(c => c.Id == cardId);
-
-        Assert.Equal("Control", loaded.Title);
-        Assert.Equal(new List<string> { "Control", "Fear" }, loaded.Themes);
-        Assert.Equal(3, loaded.BoardPosition);
-    }
-}
-```
-
-- [ ] **Step 6: Run the test to verify it fails**
-
-```bash
-cd backend
-dotnet test tests/Reflekta.Api.Tests --filter ReflektaDbContextTests
-```
-
-Expected: FAIL — compile error, `ReflektaDbContext`/`Card` not yet visible to the test project (packages/types just added, project not yet built) or a runtime error before Step 2-4 land. Since Steps 2-4 already wrote the implementation, run this once first without them to confirm you understand what fails, then proceed.
 
 - [ ] **Step 7: Run the test to verify it passes**
 
@@ -540,6 +542,8 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
   - `ICardSelectionService.SelectNext(int currentPosition, int diceResult, IReadOnlyList<Card> availableCards) -> CardSelectionResult` where `CardSelectionResult` is `record CardSelectionResult(int Position, Card Card)`.
 
 This is the code that satisfies CLAUDE.md's "Critical Deterministic Boundary" and PRODUCT_REQUIREMENTS.md GAME-002..006: no randomness anywhere in `CardSelectionService`, and `DiceService` isolated so it can be reasoned about independently.
+
+**Temporary game mechanic:** the board-wrap arithmetic in `CardSelectionService` (`(currentPosition + diceResult) % boardSize`) is a placeholder walking-skeleton mechanic for Phase 1 only — it is **not** the final Reflekta / Leela-inspired board design. Board layout, board size, special positions, and any Leela-specific rules are intentionally undefined here and belong to a later phase, once the actual board design is specified in the product documentation. Do not expand this mechanic in this phase: the only requirement Phase 1 must satisfy is GAME-002..007's determinism and reproducibility, which the modulo approach already satisfies regardless of the eventual board shape.
 
 - [ ] **Step 1: Write the failing dice test**
 
@@ -766,6 +770,12 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `ReflektaDbContext` (Task 2), `Card` model (Task 2).
 - Produces: `CardSeeder.SeedAsync(ReflektaDbContext context, CancellationToken ct = default) -> Task`. Idempotent — safe to call on every startup. This is reused directly by Task 6/7 controller tests to populate the board.
 
+**⚠️ Placeholder content notice:** the six cards implemented below (titles, wisdom text, themes) are **temporary placeholder data**, written only to unblock Phase 1 scaffolding — they are **not** approved Reflekta product content. `docs/PRODUCT.md` §5 and `docs/PRODUCT_REQUIREMENTS.md` CARD-003 list example *themes* only ("Cards may explore themes such as..."); no document in this repository contains authoritative, approved card titles or wisdom text. Before this seed is treated as real product content:
+1. The six approved MVP cards (title + wisdom text + themes) must be authored and added to an authoritative project document or data source, reviewed and approved as product content.
+2. `CardSeeder.SeedAsync` must be updated to read from that authoritative source instead of the inline placeholder list in Step 3.
+
+This task proceeds with placeholder content so that Tasks 3, 7, and 9 — which need *some* card to roll and reveal to exercise the deterministic flow end-to-end — are not blocked on content authoring. The placeholder status must not be silently forgotten; it is also called out in a code comment in Step 3.
+
 - [ ] **Step 1: Write the failing seeding test**
 
 `backend/tests/Reflekta.Api.Tests/Data/CardSeederTests.cs`:
@@ -840,6 +850,9 @@ public static class CardSeeder
         if (await context.Cards.AnyAsync(ct))
             return;
 
+        // TEMPORARY placeholder content — see the placeholder content notice at the
+        // top of this task. Not approved Reflekta product copy; replace with the
+        // authoritative six MVP cards once that source exists.
         var cards = new List<Card>
         {
             new() { Id = Guid.NewGuid(), Title = "Compassion", WisdomText = "Notice a moment when you extended understanding to someone, including yourself.", Themes = new() { "Compassion" }, BoardPosition = 0 },
