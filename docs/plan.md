@@ -80,7 +80,7 @@ Files that change together live together (each controller's tests sit in the mir
 - Create: `backend/Reflekta.sln`, `backend/src/Reflekta.Api/*` (via `dotnet new`), `backend/tests/Reflekta.Api.Tests/*` (via `dotnet new`)
 - Create: `frontend/*` (via `npm create vite@latest`)
 - Create: `docker-compose.yml`, `.env.example`, `backend/Dockerfile`, `frontend/Dockerfile`
-- Modify: `.gitignore` (already has a comprehensive base — confirm it covers `bin/`, `obj/`, `node_modules/`, `.env`)
+- Modify: `.gitignore` — its existing base is Python-oriented and does **not** cover `bin/`, `obj/`, or `node_modules/` (confirmed by inspection); `.env` is already covered. Add a `.NET` section (`bin/`, `obj/`, `*.user`, `.vs/`) and a `Node` section (`node_modules/`, `npm-debug.log*`) before running `git add` in Step 8, or the backend/test build output and the frontend's dependency tree will be tracked.
 
 **Interfaces:**
 - Produces: a running `docker compose up` stack — Postgres on `5432`, backend on `5080` with `GET /health` returning `200`, frontend dev server on `5173`.
@@ -187,7 +187,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U reflekta"]
       interval: 5s
@@ -223,6 +223,8 @@ services:
 volumes:
   postgres_data:
 ```
+
+Note: the volume mounts at `/var/lib/postgresql`, not `/var/lib/postgresql/data`. The `postgres:18-alpine` image changed its on-disk layout in major version 18 to a `pg_ctlcluster`-style structure and now expects the volume mounted at the parent directory; mounting directly at `/var/lib/postgresql/data` makes the container exit immediately with "these Docker images are configured to store database data in a format which is compatible with pg_ctlcluster... there appears to be PostgreSQL data in: /var/lib/postgresql/data (unused mount/volume)." This was caught by actually running Step 7, not by inspection.
 
 `.env.example`:
 
