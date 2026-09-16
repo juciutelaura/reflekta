@@ -43,7 +43,7 @@ reflekta/
 ├── .env.example
 ├── backend/
 │   ├── Dockerfile
-│   ├── Reflekta.sln
+│   ├── Reflekta.slnx
 │   ├── src/Reflekta.Api/
 │   │   ├── Reflekta.Api.csproj
 │   │   ├── Program.cs
@@ -77,7 +77,7 @@ Files that change together live together (each controller's tests sit in the mir
 ### Task 1: Repository scaffold, Docker Compose, and health check
 
 **Files:**
-- Create: `backend/Reflekta.sln`, `backend/src/Reflekta.Api/*` (via `dotnet new`), `backend/tests/Reflekta.Api.Tests/*` (via `dotnet new`)
+- Create: `backend/Reflekta.slnx` (the `dotnet new sln` template in the installed .NET 10 SDK generates the newer XML solution format, `.slnx`, instead of the legacy `.sln`), `backend/src/Reflekta.Api/*` (via `dotnet new`), `backend/tests/Reflekta.Api.Tests/*` (via `dotnet new`)
 - Create: `frontend/*` (via `npm create vite@latest`)
 - Create: `docker-compose.yml`, `.env.example`, `backend/Dockerfile`, `frontend/Dockerfile`
 - Modify: `.gitignore` — its existing base is Python-oriented and does **not** cover `bin/`, `obj/`, or `node_modules/` (confirmed by inspection); `.env` is already covered. Add a `.NET` section (`bin/`, `obj/`, `*.user`, `.vs/`) and a `Node` section (`node_modules/`, `npm-debug.log*`) before running `git add` in Step 8, or the backend/test build output and the frontend's dependency tree will be tracked.
