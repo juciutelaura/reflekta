@@ -295,7 +295,7 @@ namespace Reflekta.Api.Tests.Data;
 public class ReflektaDbContextTests
 {
     [Fact]
-    public async Task SavesAndLoadsCardWithThemesAndBoardPosition()
+    public async Task SavesAndLoadsCardWithThemesReflectionPromptAndBoardPosition()
     {
         var dbName = Guid.NewGuid().ToString();
         var options = new DbContextOptionsBuilder<ReflektaDbContext>()
@@ -310,6 +310,7 @@ public class ReflektaDbContextTests
                 Id = cardId,
                 Title = "Control",
                 WisdomText = "Notice where you try to hold on tightly.",
+                ReflectionPrompt = "What are you trying hardest to control today?",
                 Themes = new List<string> { "Control", "Fear" },
                 BoardPosition = 3
             });
@@ -320,6 +321,7 @@ public class ReflektaDbContextTests
         var loaded = await readContext.Cards.SingleAsync(c => c.Id == cardId);
 
         Assert.Equal("Control", loaded.Title);
+        Assert.Equal("What are you trying hardest to control today?", loaded.ReflectionPrompt);
         Assert.Equal(new List<string> { "Control", "Fear" }, loaded.Themes);
         Assert.Equal(3, loaded.BoardPosition);
     }
@@ -400,6 +402,7 @@ public class Card
     public Guid Id { get; set; }
     public string Title { get; set; } = string.Empty;
     public string WisdomText { get; set; } = string.Empty;
+    public string ReflectionPrompt { get; set; } = string.Empty;
     public List<string> Themes { get; set; } = new();
     public int BoardPosition { get; set; }
 }
@@ -770,11 +773,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 - Consumes: `ReflektaDbContext` (Task 2), `Card` model (Task 2).
 - Produces: `CardSeeder.SeedAsync(ReflektaDbContext context, CancellationToken ct = default) -> Task`. Idempotent — safe to call on every startup. This is reused directly by Task 6/7 controller tests to populate the board.
 
-**⚠️ Placeholder content notice:** the six cards implemented below (titles, wisdom text, themes) are **temporary placeholder data**, written only to unblock Phase 1 scaffolding — they are **not** approved Reflekta product content. `docs/PRODUCT.md` §5 and `docs/PRODUCT_REQUIREMENTS.md` CARD-003 list example *themes* only ("Cards may explore themes such as..."); no document in this repository contains authoritative, approved card titles or wisdom text. Before this seed is treated as real product content:
-1. The six approved MVP cards (title + wisdom text + themes) must be authored and added to an authoritative project document or data source, reviewed and approved as product content.
-2. `CardSeeder.SeedAsync` must be updated to read from that authoritative source instead of the inline placeholder list in Step 3.
-
-This task proceeds with placeholder content so that Tasks 3, 7, and 9 — which need *some* card to roll and reveal to exercise the deterministic flow end-to-end — are not blocked on content authoring. The placeholder status must not be silently forgotten; it is also called out in a code comment in Step 3.
+**✅ Authoritative content:** `docs/PRODUCT_REQUIREMENTS.md` §9 ("MVP Card Content") now defines the six approved Phase 1 pilot cards — title, theme, wisdom text, reflection prompt, and board position — as authoritative product content. That document states explicitly: "Claude Code must not replace, rewrite, reinterpret, or invent their wisdom text. The seed data must reproduce the approved content exactly." The seed data in Step 3 below reproduces that content verbatim, including the Lithuanian text. Phase 1 contains these six cards only; do not add, remove, reorder, or translate any of them, and do not author additional cards — per `docs/PRODUCT_REQUIREMENTS.md` §9 "Content rules," additional cards are explicitly out of scope for Phase 1.
 
 - [ ] **Step 1: Write the failing seeding test**
 
@@ -783,6 +782,7 @@ This task proceeds with placeholder content so that Tasks 3, 7, and 9 — which 
 ```csharp
 using Microsoft.EntityFrameworkCore;
 using Reflekta.Api.Data;
+using Reflekta.Api.Models;
 using Xunit;
 
 namespace Reflekta.Api.Tests.Data;
@@ -821,8 +821,53 @@ public class CardSeederTests
 
         Assert.Equal(6, await context.Cards.CountAsync());
     }
+
+    [Fact]
+    public async Task SeedAsync_ReproducesTheApprovedCardContentExactly()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        using var context = CreateContext(dbName);
+
+        await CardSeeder.SeedAsync(context);
+
+        var cards = await context.Cards.OrderBy(c => c.BoardPosition).ToListAsync();
+
+        AssertCard(cards[0], "Stebėtojas", "Sąmoningumas",
+            "Ne kiekviena mintis reikalauja tavo atsakymo. Kartais pirmas žingsnis yra pastebėti, kas vyksta tavo viduje, nebandant to pakeisti.",
+            "Ką pastebi savyje, kai tiesiog stebi savo mintis, jų nevertindamas?");
+
+        AssertCard(cards[1], "„Aš“", "Tapatybė",
+            "Mes dažnai kalbame apie save taip, lyg jau tiksliai žinotume, kas esame. Tačiau dalis to, ką vadiname „aš“, gali būti istorijos, kurias apie save kartojame.",
+            "Kuri istorija apie save tau atrodo tokia pažįstama, kad retai ją kvestionuoji?");
+
+        AssertCard(cards[2], "Už durų", "Baimė",
+            "Baimė dažnai kalba apie tai, kas gali nutikti. Tačiau kartais ji daugiau pasako apie tai, ką stengiamės apsaugoti.",
+            "Jeigu pažvelgtum už savo baimės — ką ji galbūt bando apsaugoti?");
+
+        AssertCard(cards[3], "Paleidimas", "Kontrolė",
+            "Noras kontroliuoti gali suteikti saugumo jausmą. Tačiau ne viskas, kas vyksta tavo gyvenime, yra tavo rankose.",
+            "Ko šiandien labiausiai stengiesi kontroliuoti?");
+
+        AssertCard(cards[4], "Tarp", "Pokytis",
+            "Pokytis ne visada prasideda nuo aiškaus sprendimo. Kartais pirmiausia atsiranda jausmas, kad tai, kas anksčiau tiko, nebetinka, nors dar nežinai, kas bus toliau.",
+            "Kas tavo gyvenime šiuo metu atrodo tarsi „tarp“ — tarp to, kas buvo, ir to, kas dar tik atsiranda?");
+
+        AssertCard(cards[5], "Nežinau", "Nežinomybė",
+            "Nežinojimas gali atrodyti kaip problema, kurią reikia kuo greičiau išspręsti. Tačiau kartais atsakymo paieška per anksti neleidžia pamatyti to, kas dar tik formuojasi.",
+            "Kurioje savo gyvenimo vietoje tau sunkiausia pasakyti „aš dar nežinau“?");
+    }
+
+    private static void AssertCard(Card card, string title, string theme, string wisdomText, string reflectionPrompt)
+    {
+        Assert.Equal(title, card.Title);
+        Assert.Equal(new List<string> { theme }, card.Themes);
+        Assert.Equal(wisdomText, card.WisdomText);
+        Assert.Equal(reflectionPrompt, card.ReflectionPrompt);
+    }
 }
 ```
+
+This test pins the exact approved content from `docs/PRODUCT_REQUIREMENTS.md` §9 so any accidental edit, rewrite, or mistranslation in `CardSeeder` fails the build — this is the testable guarantee behind "must reproduce the approved content exactly."
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -845,22 +890,70 @@ namespace Reflekta.Api.Data;
 
 public static class CardSeeder
 {
+    // Authoritative Phase 1 card content — reproduced exactly from
+    // docs/PRODUCT_REQUIREMENTS.md §9 "MVP Card Content". Do not edit, translate,
+    // reorder, or add to this list; see that document's "Content rules".
     public static async Task SeedAsync(ReflektaDbContext context, CancellationToken ct = default)
     {
         if (await context.Cards.AnyAsync(ct))
             return;
 
-        // TEMPORARY placeholder content — see the placeholder content notice at the
-        // top of this task. Not approved Reflekta product copy; replace with the
-        // authoritative six MVP cards once that source exists.
         var cards = new List<Card>
         {
-            new() { Id = Guid.NewGuid(), Title = "Compassion", WisdomText = "Notice a moment when you extended understanding to someone, including yourself.", Themes = new() { "Compassion" }, BoardPosition = 0 },
-            new() { Id = Guid.NewGuid(), Title = "Fear", WisdomText = "Fear often points at something we care about, not something we should avoid.", Themes = new() { "Fear" }, BoardPosition = 1 },
-            new() { Id = Guid.NewGuid(), Title = "Control", WisdomText = "Notice where you try to hold on tightly, and what happens when you loosen your grip.", Themes = new() { "Control" }, BoardPosition = 2 },
-            new() { Id = Guid.NewGuid(), Title = "Attachment", WisdomText = "What we hold onto can tell us as much about ourselves as what we let go of.", Themes = new() { "Attachment" }, BoardPosition = 3 },
-            new() { Id = Guid.NewGuid(), Title = "Change", WisdomText = "Something that once fit may no longer fit — that is not necessarily a failure.", Themes = new() { "Change" }, BoardPosition = 4 },
-            new() { Id = Guid.NewGuid(), Title = "Acceptance", WisdomText = "Acceptance is not agreement. It is simply seeing what is actually there.", Themes = new() { "Acceptance" }, BoardPosition = 5 },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Title = "Stebėtojas",
+                Themes = new() { "Sąmoningumas" },
+                WisdomText = "Ne kiekviena mintis reikalauja tavo atsakymo. Kartais pirmas žingsnis yra pastebėti, kas vyksta tavo viduje, nebandant to pakeisti.",
+                ReflectionPrompt = "Ką pastebi savyje, kai tiesiog stebi savo mintis, jų nevertindamas?",
+                BoardPosition = 0
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Title = "„Aš“",
+                Themes = new() { "Tapatybė" },
+                WisdomText = "Mes dažnai kalbame apie save taip, lyg jau tiksliai žinotume, kas esame. Tačiau dalis to, ką vadiname „aš“, gali būti istorijos, kurias apie save kartojame.",
+                ReflectionPrompt = "Kuri istorija apie save tau atrodo tokia pažįstama, kad retai ją kvestionuoji?",
+                BoardPosition = 1
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Title = "Už durų",
+                Themes = new() { "Baimė" },
+                WisdomText = "Baimė dažnai kalba apie tai, kas gali nutikti. Tačiau kartais ji daugiau pasako apie tai, ką stengiamės apsaugoti.",
+                ReflectionPrompt = "Jeigu pažvelgtum už savo baimės — ką ji galbūt bando apsaugoti?",
+                BoardPosition = 2
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Title = "Paleidimas",
+                Themes = new() { "Kontrolė" },
+                WisdomText = "Noras kontroliuoti gali suteikti saugumo jausmą. Tačiau ne viskas, kas vyksta tavo gyvenime, yra tavo rankose.",
+                ReflectionPrompt = "Ko šiandien labiausiai stengiesi kontroliuoti?",
+                BoardPosition = 3
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Title = "Tarp",
+                Themes = new() { "Pokytis" },
+                WisdomText = "Pokytis ne visada prasideda nuo aiškaus sprendimo. Kartais pirmiausia atsiranda jausmas, kad tai, kas anksčiau tiko, nebetinka, nors dar nežinai, kas bus toliau.",
+                ReflectionPrompt = "Kas tavo gyvenime šiuo metu atrodo tarsi „tarp“ — tarp to, kas buvo, ir to, kas dar tik atsiranda?",
+                BoardPosition = 4
+            },
+            new()
+            {
+                Id = Guid.NewGuid(),
+                Title = "Nežinau",
+                Themes = new() { "Nežinomybė" },
+                WisdomText = "Nežinojimas gali atrodyti kaip problema, kurią reikia kuo greičiau išspręsti. Tačiau kartais atsakymo paieška per anksti neleidžia pamatyti to, kas dar tik formuojasi.",
+                ReflectionPrompt = "Kurioje savo gyvenimo vietoje tau sunkiausia pasakyti „aš dar nežinau“?",
+                BoardPosition = 5
+            },
         };
 
         context.Cards.AddRange(cards);
@@ -1399,7 +1492,7 @@ Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
   - `POST /api/journeys/{id}/roll` → `RollResultDto`.
   - `GET /api/journeys/{id}/current-card` → `RollResultDto` or `404` if nothing rolled yet.
   - `record JourneyDto(Guid Id, Guid IntentionId, string Status, DateTimeOffset StartedAt)`
-  - `record RollResultDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, List<string> CardThemes, int SequenceNumber)` — consumed directly by the frontend in Task 8.
+  - `record RollResultDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber)` — consumed directly by the frontend in Task 8.
 
 - [ ] **Step 1: Write the failing controller tests**
 
@@ -1538,7 +1631,7 @@ namespace Reflekta.Api.Controllers;
 
 public record CreateJourneyRequest(Guid IntentionId);
 public record JourneyDto(Guid Id, Guid IntentionId, string Status, DateTimeOffset StartedAt);
-public record RollResultDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, List<string> CardThemes, int SequenceNumber);
+public record RollResultDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber);
 
 [ApiController]
 [Route("api/journeys")]
@@ -1631,7 +1724,7 @@ public class JourneysController : ControllerBase
 
         return Ok(new RollResultDto(
             diceResult, selection.Card.Id, selection.Card.Title, selection.Card.WisdomText,
-            selection.Card.Themes, playedCard.SequenceNumber));
+            selection.Card.ReflectionPrompt, selection.Card.Themes, playedCard.SequenceNumber));
     }
 
     [HttpGet("{journeyId:guid}/current-card")]
@@ -1654,7 +1747,7 @@ public class JourneysController : ControllerBase
 
         return Ok(new RollResultDto(
             lastPlayed.DiceResult, lastPlayed.Card.Id, lastPlayed.Card.Title, lastPlayed.Card.WisdomText,
-            lastPlayed.Card.Themes, lastPlayed.SequenceNumber));
+            lastPlayed.Card.ReflectionPrompt, lastPlayed.Card.Themes, lastPlayed.SequenceNumber));
     }
 }
 ```
@@ -1732,6 +1825,7 @@ export interface RollResultDto {
   cardId: string;
   cardTitle: string;
   cardWisdomText: string;
+  cardReflectionPrompt: string;
   cardThemes: string[];
   sequenceNumber: number;
 }
@@ -1923,6 +2017,7 @@ describe("JourneyPage", () => {
         cardId: "card-1",
         cardTitle: "Control",
         cardWisdomText: "Notice where you try to hold on tightly.",
+        cardReflectionPrompt: "What are you trying hardest to control today?",
         cardThemes: ["Control"],
         sequenceNumber: 1,
       }),
@@ -1935,6 +2030,7 @@ describe("JourneyPage", () => {
 
     await waitFor(() => expect(screen.getByText("Control")).toBeInTheDocument());
     expect(screen.getByText(/notice where you try to hold on tightly/i)).toBeInTheDocument();
+    expect(screen.getByText(/what are you trying hardest to control today/i)).toBeInTheDocument();
     expect(apiClient.rollDice).toHaveBeenCalledWith("journey-1");
   });
 });
@@ -1984,6 +2080,7 @@ export function JourneyPage({ apiClient, journeyId }: JourneyPageProps) {
         <article>
           <h2>{card.cardTitle}</h2>
           <p>{card.cardWisdomText}</p>
+          <p>{card.cardReflectionPrompt}</p>
         </article>
       )}
     </div>
@@ -2118,11 +2215,15 @@ git status
 
 ## Self-Review Notes
 
-- **Spec coverage:** AUTH-001..005 (Task 5, 6, 7), INT-001..003/007 (Task 6), JRN-001..003/007 (Task 7), GAME-001..007 (Task 3, 7), CARD-001, 004..007 (Task 4, 7) satisfied structurally; CARD-002 ("authored reflection/wisdom content") is only structurally satisfied in Phase 1 — the seeded text is placeholder, not approved content, per Task 4's placeholder notice. NFR-SEC-001..005 (Tasks 5-7 authorization tests), NFR-PRIV-001..002 (data isolation tests in Task 6-7). INT-004..006 (AI clarification), REF-*, AI-*, SAFE-*, CONV-*, SES-*, HIS-*, MEM-* are explicitly out of scope per Global Constraints and belong to later phases.
-- **Placeholder scan:** no TBD/TODO markers in the instructions themselves — every step has runnable code or an exact shell command. Two things are intentionally and explicitly labeled non-final product/design decisions, not incomplete plan text: the six seed cards (Task 4) are placeholder content pending an authoritative source, and the board-wrap arithmetic (Task 3) is a temporary walking-skeleton mechanic pending the real Leela-inspired board design. Both are called out in place — including a code comment for the former — so neither is mistaken for an approved decision, and neither leaves any step ambiguous about what to actually implement.
-- **Type consistency:** `IntentionDto`, `JourneyDto`, `RollResultDto` field names and types are identical between backend records (Tasks 6-7) and frontend TypeScript interfaces (Task 8) — verified field-by-field (`cardThemes: string[]` ↔ `List<string> CardThemes`, `diceResult: number` ↔ `int DiceResult`, etc.).
-- **Corrections applied in this revision:** Task 2's step order now writes the failing test before any implementation exists (previously the implementation was written first and the "failing" run was not a real failure). Task 4/Program.cs's startup migration call is now guarded by `Database.IsRelational()` — the previous version unconditionally called `MigrateAsync()`, which throws against the EF Core InMemory provider used by every controller test from Task 5 onward; this was a real defect, not just a documentation gap, and would have made Tasks 6-9 fail outright.
+- **Spec coverage:** AUTH-001..005 (Task 5, 6, 7), INT-001..003/007 (Task 6), JRN-001..003/007 (Task 7), GAME-001..007 (Task 3, 7), CARD-001..002, 004..007 (Task 4, 7) — CARD-002 ("authored reflection/wisdom content") is now fully satisfied with approved content, not just structurally, since Task 4 seeds the exact six cards authored in `docs/PRODUCT_REQUIREMENTS.md` §9. NFR-SEC-001..005 (Tasks 5-7 authorization tests), NFR-PRIV-001..002 (data isolation tests in Task 6-7). INT-004..006 (AI clarification), REF-*, AI-*, SAFE-*, CONV-*, SES-*, HIS-*, MEM-* are explicitly out of scope per Global Constraints and belong to later phases.
+- **Placeholder scan:** no TBD/TODO markers in the instructions themselves — every step has runnable code or an exact shell command. One thing remains intentionally and explicitly labeled a non-final design decision, not incomplete plan text: the board-wrap arithmetic (Task 3) is a temporary walking-skeleton mechanic pending the real Leela-inspired board design. It is called out in place so it is not mistaken for an approved decision, and it does not leave any step ambiguous about what to actually implement. The six seed cards (Task 4) are no longer a placeholder-content gap — they are the exact approved content from `docs/PRODUCT_REQUIREMENTS.md` §9, reproduced verbatim and pinned by an exact-content test.
+- **Type consistency:** `IntentionDto`, `JourneyDto`, `RollResultDto` field names and types are identical between backend records (Tasks 6-7) and frontend TypeScript interfaces (Task 8) — verified field-by-field (`cardThemes: string[]` ↔ `List<string> CardThemes`, `cardReflectionPrompt: string` ↔ `string CardReflectionPrompt`, `diceResult: number` ↔ `int DiceResult`, etc.).
+- **Revision history:**
+  - Task 2's step order now writes the failing test before any implementation exists (previously the implementation was written first and the "failing" run was not a real failure).
+  - Task 4/`Program.cs`'s startup migration call is guarded by `Database.IsRelational()` — the earlier unconditional `MigrateAsync()` call would throw against the EF Core InMemory provider used by every controller test from Task 5 onward; this was a real defect, not just a documentation gap, and would have made Tasks 6-9 fail outright.
+  - The six MVP cards (Task 4) were placeholder English content; they are now the authoritative Lithuanian content approved in `docs/PRODUCT_REQUIREMENTS.md` §9 "MVP Card Content," reproduced exactly (title, theme, wisdom text, reflection prompt, board position). A new `Card.ReflectionPrompt` field was threaded through Task 2's entity model and DbContext test, Task 4's seed data and content-fidelity test, Task 7's `RollResultDto` and both controller actions, and Task 8's `apiClient`/`JourneyPage`/test — so the approved reflection prompt is stored, returned by the API, and displayed, consistently end-to-end.
+  - `plan.md` was relocated to `docs/plan.md` (tracked in git); this document's own path references below are updated accordingly.
 
 ---
 
-**Plan complete and saved to `plan.md`.**
+**Plan complete and saved to `docs/plan.md`.**

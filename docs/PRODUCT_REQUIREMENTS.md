@@ -253,9 +253,6 @@ Examples:
 * Uncertainty
 * Compassion
 
-
-Card-*
-
 ## MVP Card Content
 
 For Phase 1, Reflekta uses six approved pilot cards.

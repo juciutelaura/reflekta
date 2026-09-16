@@ -142,11 +142,14 @@ Card
 - id
 - title
 - wisdom_text
+- reflection_prompt        (the authored question paired with this card's wisdom text)
 - themes                  (e.g. ["Control", "Fear"])
 - board_position           (position used by the deterministic game rules)
 ```
 
 Cards are seeded product/domain data. They are not created or edited through normal application user flows, and their wisdom text is never rewritten by the LLM during gameplay (CARD-005, CARD-006).
+
+The six MVP cards, including their `reflection_prompt` values, are authoritative content defined in `docs/PRODUCT_REQUIREMENTS.md` §9 ("MVP Card Content") — this document defines the column's shape, not its values.
 
 ---
 
