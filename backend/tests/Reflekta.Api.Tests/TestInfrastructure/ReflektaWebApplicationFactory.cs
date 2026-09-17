@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Reflekta.Api.Data;
@@ -17,7 +18,15 @@ public class ReflektaWebApplicationFactory : WebApplicationFactory<Program>
     {
         builder.ConfigureServices(services =>
         {
+            // Program.cs registers the Npgsql provider via AddDbContext, which adds a
+            // DbContextOptions<ReflektaDbContext> AND an IDbContextOptionsConfiguration<ReflektaDbContext>
+            // delegate. Removing only DbContextOptions<ReflektaDbContext> leaves that delegate behind,
+            // so both Npgsql and InMemory end up configured on the same options instance. Remove all
+            // three registrations before adding the InMemory provider.
             services.RemoveAll<DbContextOptions<ReflektaDbContext>>();
+            services.RemoveAll<DbContextOptions>();
+            services.RemoveAll<IDbContextOptionsConfiguration<ReflektaDbContext>>();
+
             services.AddDbContext<ReflektaDbContext>(options =>
                 options.UseInMemoryDatabase(DatabaseName));
 
