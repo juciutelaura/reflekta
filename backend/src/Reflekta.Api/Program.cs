@@ -18,7 +18,20 @@ var app = builder.Build();
 app.MapHealthChecks("/health");
 app.MapControllers();
 
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<ReflektaDbContext>();
+
+    if (dbContext.Database.IsRelational())
+    {
+        await dbContext.Database.MigrateAsync();
+    }
+
+    await CardSeeder.SeedAsync(dbContext);
+}
+
 app.Run();
+
 
 
 // Required so WebApplicationFactory<Program> (used by integration tests in Task 5+)
