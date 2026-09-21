@@ -16,6 +16,7 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
     {
         options.Authority = builder.Configuration["Clerk:Authority"];
+        options.MapInboundClaims = false;
         options.TokenValidationParameters = new()
         {
             ValidateAudience = false,
@@ -29,8 +30,19 @@ builder.Services.AddSingleton<IDiceService, DiceService>();
 builder.Services.AddSingleton<ICardSelectionService, CardSelectionService>();
 
 
-var app = builder.Build();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("Frontend", policy =>
+        policy.WithOrigins("http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod());
+});
 
+
+
+
+var app = builder.Build();
+app.UseCors("Frontend");
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -48,6 +60,8 @@ using (var scope = app.Services.CreateScope())
 
     await CardSeeder.SeedAsync(dbContext);
 }
+
+
 
 app.Run();
 
