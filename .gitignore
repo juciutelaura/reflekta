@@ -216,3 +216,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+
+# Node
+node_modules/
+npm-debug.log*

@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Reflekta.Api/Reflekta.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Reflekta.Api.Tests/Reflekta.Api.Tests.csproj" />
+  </Folder>
+</Solution>
