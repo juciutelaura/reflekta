@@ -35,17 +35,6 @@
   max-width: 420px;
 }
 
-.intro h1 {
-  font-size: clamp(28px, 4vw, 38px);
-  letter-spacing: -0.02em;
-}
-
-.intro p {
-  margin-top: 12px;
-  font-family: var(--font-serif);
-  font-size: 19px;
-}
-
 .field {
   width: 100%;
   display: flex;
@@ -106,8 +95,6 @@
 }
 
 .btn-ghost {
-  height: 40px;
-  padding: 0 16px;
   background: transparent;
   color: var(--color-ink);
   border: 1px solid var(--color-border);
@@ -116,6 +103,11 @@
 .btn-ghost:hover {
   opacity: 1;
   background: var(--color-surface);
+}
+
+.btn-sm {
+  height: 40px;
+  padding: 0 16px;
 }
 
 .error {
