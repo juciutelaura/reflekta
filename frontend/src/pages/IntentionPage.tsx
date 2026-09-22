@@ -27,16 +27,22 @@ export function IntentionPage({ apiClient, onJourneyStarted }: IntentionPageProp
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <label htmlFor="intention-text">What would you like to explore?</label>
-      <textarea
-        id="intention-text"
-        value={text}
-        onChange={(event) => setText(event.target.value)}
-        placeholder="What is on your mind right now?"
-      />
-      {error && <p role="alert">{error}</p>}
-      <button type="submit" disabled={isSubmitting || text.trim().length === 0}>
+    <form className="stack" onSubmit={handleSubmit}>
+      <div className="field">
+        <label htmlFor="intention-text">What would you like to explore?</label>
+        <textarea
+          id="intention-text"
+          value={text}
+          onChange={(event) => setText(event.target.value)}
+          placeholder="What is on your mind right now?"
+        />
+      </div>
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+      <button type="submit" className="btn" disabled={isSubmitting || text.trim().length === 0}>
         Continue
       </button>
     </form>
