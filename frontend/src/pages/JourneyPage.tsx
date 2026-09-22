@@ -21,15 +21,15 @@ export function JourneyPage({ apiClient, journeyId }: JourneyPageProps) {
   }
 
   return (
-    <div>
-      <button onClick={handleRoll} disabled={isRolling}>
+    <div className="stack">
+      <button onClick={handleRoll} disabled={isRolling} className="btn">
         Roll
       </button>
       {card && (
-        <article>
+        <article className="card">
           <h2>{card.cardTitle}</h2>
           <p>{card.cardWisdomText}</p>
-          <p>{card.cardReflectionPrompt}</p>
+          <p className="prompt">{card.cardReflectionPrompt}</p>
         </article>
       )}
     </div>
