@@ -23,6 +23,9 @@ public class JourneysController : ControllerBase
     private readonly ICurrentUserService _currentUserService;
     private readonly IDiceService _diceService;
     private readonly ICardSelectionService _cardSelectionService;
+    public record JourneySummaryDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, int CardCount);
+    public record PlayedCardDetailDto(Guid Id, int SequenceNumber, int DiceResult, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, string? ReflectionText);
+    public record JourneyDetailDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, List<PlayedCardDetailDto> PlayedCards);
 
     public JourneysController(
         ReflektaDbContext dbContext,
@@ -207,6 +210,60 @@ public class JourneysController : ControllerBase
 
         return Ok(new JourneyDto(journey.Id, journey.IntentionId, journey.Status.ToString(), journey.StartedAt, journey.CompletedAt));
     }
+        
+    [HttpGet]
+    public async Task<ActionResult<List<JourneySummaryDto>>> List(CancellationToken ct)
+    {
+        var userId = await _currentUserService.GetOrCreateCurrentUserIdAsync(ct);
+
+        var journeys = await _dbContext.Journeys
+            .Include(j => j.Intention)
+            .Include(j => j.PlayedCards)
+            .Where(j => j.UserId == userId)
+            .OrderByDescending(j => j.StartedAt)
+            .ToListAsync(ct);
+
+        var result = journeys
+            .Select(j => new JourneySummaryDto(
+                j.Id, j.Intention!.OriginalText, j.Status.ToString(), j.StartedAt, j.CompletedAt, j.PlayedCards.Count))
+            .ToList();
+
+        return Ok(result);
+    }
+
+    [HttpGet("{journeyId:guid}")]
+    public async Task<ActionResult<JourneyDetailDto>> GetById(Guid journeyId, CancellationToken ct)
+    {
+        var userId = await _currentUserService.GetOrCreateCurrentUserIdAsync(ct);
+
+        var journey = await _dbContext.Journeys
+            .Include(j => j.Intention)
+            .Include(j => j.PlayedCards).ThenInclude(pc => pc.Card)
+            .FirstOrDefaultAsync(j => j.Id == journeyId, ct);
+
+        if (journey is null)
+            return NotFound();
+        if (journey.UserId != userId)
+            return Forbid();
+
+        var playedCardIds = journey.PlayedCards.Select(pc => pc.Id).ToList();
+        var reflectionsByPlayedCardId = await _dbContext.Reflections
+            .Where(r => playedCardIds.Contains(r.PlayedCardId))
+            .ToDictionaryAsync(r => r.PlayedCardId, r => r.Text, ct);
+
+        var playedCards = journey.PlayedCards
+            .OrderBy(pc => pc.SequenceNumber)
+            .Select(pc => new PlayedCardDetailDto(
+                pc.Id, pc.SequenceNumber, pc.DiceResult, pc.Card!.Title, pc.Card.WisdomText,
+                pc.Card.ReflectionPrompt, pc.Card.Themes,
+                reflectionsByPlayedCardId.GetValueOrDefault(pc.Id)))
+            .ToList();
+
+        return Ok(new JourneyDetailDto(
+            journey.Id, journey.Intention!.OriginalText, journey.Status.ToString(),
+            journey.StartedAt, journey.CompletedAt, playedCards));
+    }
+
 
 
 }

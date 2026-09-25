@@ -28,6 +28,9 @@ public class ReflektaDbContext : DbContext
             e.HasMany(j => j.PlayedCards)
                 .WithOne()
                 .HasForeignKey(pc => pc.JourneyId);
+            e.HasOne(j => j.Intention)
+                .WithMany()
+                .HasForeignKey(j => j.IntentionId);
         });
 
         modelBuilder.Entity<Card>(e =>
@@ -48,6 +51,7 @@ public class ReflektaDbContext : DbContext
         {
             e.HasIndex(r => r.PlayedCardId).IsUnique();
         });
+
 
     }
 }
