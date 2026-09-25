@@ -102,4 +102,96 @@ public class JourneysControllerTests : IAsyncLifetime
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
+
+
+        [Fact]
+    public async Task Roll_WithoutReflectingOnThePreviousCard_ReturnsBadRequest()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        var secondRoll = await _client.PostAsync($"/api/journeys/{journey.Id}/roll", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, secondRoll.StatusCode);
+    }
+
+    [Fact]
+    public async Task SubmitReflection_ThenRoll_Succeeds()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+
+        var reflectionResponse = await _client.PostAsJsonAsync(
+            $"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("This made me think of my old job."));
+        reflectionResponse.EnsureSuccessStatusCode();
+        var reflection = await reflectionResponse.Content.ReadFromJsonAsync<ReflectionDto>();
+        Assert.Equal("This made me think of my old job.", reflection!.Text);
+
+        var secondRoll = await _client.PostAsync($"/api/journeys/{journey.Id}/roll", null);
+        Assert.True(secondRoll.IsSuccessStatusCode);
+    }
+
+    [Fact]
+    public async Task SubmitReflection_Twice_ReturnsBadRequest()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("First."));
+
+        var second = await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("Second."));
+
+        Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
+    }
+
+    [Fact]
+    public async Task SubmitReflection_WithBlankText_ReturnsBadRequest()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+
+        var response = await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("   "));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SubmitReflection_BeforeAnyRoll_ReturnsBadRequest()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+
+        var response = await _client.PostAsJsonAsync($"/api/journeys/{journey!.Id}/reflection", new SubmitReflectionRequest("Too early."));
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task SubmitReflection_OnAnotherUsersJourney_ReturnsForbidden()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+
+        AuthenticateAs("user-2");
+        var response = await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("Not mine."));
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
 }

@@ -10,6 +10,9 @@ namespace Reflekta.Api.Controllers;
 public record CreateJourneyRequest(Guid IntentionId);
 public record JourneyDto(Guid Id, Guid IntentionId, string Status, DateTimeOffset StartedAt);
 public record RollResultDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber);
+public record SubmitReflectionRequest(string Text);
+public record ReflectionDto(Guid Id, Guid PlayedCardId, string Text, DateTimeOffset CreatedAt);
+
 
 [ApiController]
 [Route("api/journeys")]
@@ -78,10 +81,13 @@ public class JourneysController : ControllerBase
         var cards = await _dbContext.Cards.AsNoTracking().ToListAsync(ct);
 
         var currentPosition = 0;
-        if (journey.PlayedCards.Count > 0)
+ 
+         if (journey.PlayedCards.Count > 0)
         {
-            var lastPlayed = journey.PlayedCards.OrderByDescending(pc => pc.SequenceNumber).First();
-            currentPosition = cards.Single(c => c.Id == lastPlayed.CardId).BoardPosition;
+            var lastPlayedCardId = journey.PlayedCards.OrderByDescending(pc => pc.SequenceNumber).First().Id;
+            var hasReflection = await _dbContext.Reflections.AnyAsync(r => r.PlayedCardId == lastPlayedCardId, ct);
+            if (!hasReflection)
+                return BadRequest("Write a reflection before continuing the journey.");
         }
 
         var diceResult = _diceService.Roll();
@@ -127,4 +133,45 @@ public class JourneysController : ControllerBase
             lastPlayed.DiceResult, lastPlayed.Card.Id, lastPlayed.Card.Title, lastPlayed.Card.WisdomText,
             lastPlayed.Card.ReflectionPrompt, lastPlayed.Card.Themes, lastPlayed.SequenceNumber));
     }
+
+    
+    [HttpPost("{journeyId:guid}/reflection")]
+    public async Task<ActionResult<ReflectionDto>> SubmitReflection(Guid journeyId, [FromBody] SubmitReflectionRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Text))
+            return BadRequest("Reflection text is required.");
+
+        var userId = await _currentUserService.GetOrCreateCurrentUserIdAsync(ct);
+
+        var journey = await _dbContext.Journeys
+            .Include(j => j.PlayedCards)
+            .FirstOrDefaultAsync(j => j.Id == journeyId, ct);
+
+        if (journey is null)
+            return NotFound();
+        if (journey.UserId != userId)
+            return Forbid();
+
+        var lastPlayed = journey.PlayedCards.OrderByDescending(pc => pc.SequenceNumber).FirstOrDefault();
+        if (lastPlayed is null)
+            return BadRequest("Roll before writing a reflection.");
+
+        var alreadyReflected = await _dbContext.Reflections.AnyAsync(r => r.PlayedCardId == lastPlayed.Id, ct);
+        if (alreadyReflected)
+            return BadRequest("This card already has a reflection.");
+
+        var reflection = new Reflection
+        {
+            Id = Guid.NewGuid(),
+            PlayedCardId = lastPlayed.Id,
+            Text = request.Text.Trim(),
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+
+        _dbContext.Reflections.Add(reflection);
+        await _dbContext.SaveChangesAsync(ct);
+
+        return Ok(new ReflectionDto(reflection.Id, reflection.PlayedCardId, reflection.Text, reflection.CreatedAt));
+    }
+
 }
