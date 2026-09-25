@@ -8,10 +8,10 @@ using Reflekta.Api.Services;
 namespace Reflekta.Api.Controllers;
 
 public record CreateJourneyRequest(Guid IntentionId);
-public record JourneyDto(Guid Id, Guid IntentionId, string Status, DateTimeOffset StartedAt);
 public record RollResultDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber);
 public record SubmitReflectionRequest(string Text);
 public record ReflectionDto(Guid Id, Guid PlayedCardId, string Text, DateTimeOffset CreatedAt);
+public record JourneyDto(Guid Id, Guid IntentionId, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt);
 
 
 [ApiController]
@@ -58,8 +58,9 @@ public class JourneysController : ControllerBase
 
         _dbContext.Journeys.Add(journey);
         await _dbContext.SaveChangesAsync(ct);
+        
+        return Ok(new JourneyDto(journey.Id, journey.IntentionId, journey.Status.ToString(), journey.StartedAt, journey.CompletedAt));
 
-        return Ok(new JourneyDto(journey.Id, journey.IntentionId, journey.Status.ToString(), journey.StartedAt));
     }
 
     [HttpPost("{journeyId:guid}/roll")]
@@ -78,17 +79,19 @@ public class JourneysController : ControllerBase
         if (journey.Status != JourneyStatus.Active)
             return BadRequest("Journey is not active.");
 
-        var cards = await _dbContext.Cards.AsNoTracking().ToListAsync(ct);
-
-        var currentPosition = 0;
- 
-         if (journey.PlayedCards.Count > 0)
+        var lastPlayed = journey.PlayedCards.OrderByDescending(pc => pc.SequenceNumber).FirstOrDefault();
+        if (lastPlayed is not null)
         {
-            var lastPlayedCardId = journey.PlayedCards.OrderByDescending(pc => pc.SequenceNumber).First().Id;
-            var hasReflection = await _dbContext.Reflections.AnyAsync(r => r.PlayedCardId == lastPlayedCardId, ct);
+            var hasReflection = await _dbContext.Reflections.AnyAsync(r => r.PlayedCardId == lastPlayed.Id, ct);
             if (!hasReflection)
                 return BadRequest("Write a reflection before continuing the journey.");
         }
+
+        var cards = await _dbContext.Cards.AsNoTracking().ToListAsync(ct);
+
+        var currentPosition = lastPlayed is null
+            ? 0
+            : cards.Single(c => c.Id == lastPlayed.CardId).BoardPosition;
 
         var diceResult = _diceService.Roll();
         var selection = _cardSelectionService.SelectNext(currentPosition, diceResult, cards);
@@ -173,5 +176,37 @@ public class JourneysController : ControllerBase
 
         return Ok(new ReflectionDto(reflection.Id, reflection.PlayedCardId, reflection.Text, reflection.CreatedAt));
     }
+
+    [HttpPost("{journeyId:guid}/complete")]
+    public async Task<ActionResult<JourneyDto>> Complete(Guid journeyId, CancellationToken ct)
+    {
+        var userId = await _currentUserService.GetOrCreateCurrentUserIdAsync(ct);
+
+        var journey = await _dbContext.Journeys
+            .Include(j => j.PlayedCards)
+            .FirstOrDefaultAsync(j => j.Id == journeyId, ct);
+
+        if (journey is null)
+            return NotFound();
+        if (journey.UserId != userId)
+            return Forbid();
+        if (journey.Status != JourneyStatus.Active)
+            return BadRequest("Journey is already completed.");
+
+        var lastPlayed = journey.PlayedCards.OrderByDescending(pc => pc.SequenceNumber).FirstOrDefault();
+        if (lastPlayed is null)
+            return BadRequest("Roll at least once before completing the journey.");
+
+        var hasReflection = await _dbContext.Reflections.AnyAsync(r => r.PlayedCardId == lastPlayed.Id, ct);
+        if (!hasReflection)
+            return BadRequest("Write a reflection before completing the journey.");
+
+        journey.Status = JourneyStatus.Completed;
+        journey.CompletedAt = DateTimeOffset.UtcNow;
+        await _dbContext.SaveChangesAsync(ct);
+
+        return Ok(new JourneyDto(journey.Id, journey.IntentionId, journey.Status.ToString(), journey.StartedAt, journey.CompletedAt));
+    }
+
 
 }
