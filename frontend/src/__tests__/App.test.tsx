@@ -18,14 +18,15 @@ vi.mock("@clerk/clerk-react", () => ({
 }));
 
 describe("App", () => {
-  it("renders the wordmark and both the sign-in and sign-out controls", () => {
+  it("renders the wordmark, a history link, and both auth controls on the root route", () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/"]}>
         <App />
       </MemoryRouter>,
     );
 
     expect(screen.getAllByText("Reflekta").length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: /history/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign in/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /sign out/i })).toBeInTheDocument();
   });
