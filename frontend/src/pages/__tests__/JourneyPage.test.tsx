@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import { JourneyPage, JourneyDetailPage } from "../JourneyPage";
+import { JourneyPage } from "../JourneyPage";
+import { JourneyDetailPage } from "../JourneyDetailPage";
 import type { ApiClient } from "../../lib/apiClient";
 
 function createApiClientMock(): ApiClient {
