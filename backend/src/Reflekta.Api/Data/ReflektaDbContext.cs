@@ -14,6 +14,8 @@ public class ReflektaDbContext : DbContext
     public DbSet<Card> Cards => Set<Card>();
     public DbSet<PlayedCard> PlayedCards => Set<PlayedCard>();
     public DbSet<Reflection> Reflections => Set<Reflection>();
+    public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -50,6 +52,14 @@ public class ReflektaDbContext : DbContext
         modelBuilder.Entity<Reflection>(e =>
         {
             e.HasIndex(r => r.PlayedCardId).IsUnique();
+        });
+
+        modelBuilder.Entity<ConversationMessage>(e =>
+        {
+            e.HasOne<PlayedCard>()
+                .WithMany()
+                .HasForeignKey(m => m.PlayedCardId);
+            e.HasIndex(m => new { m.PlayedCardId, m.CreatedAt });
         });
 
 
