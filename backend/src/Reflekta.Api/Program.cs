@@ -33,9 +33,15 @@ builder.Services.AddSingleton<ICardSelectionService, CardSelectionService>();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
-        policy.WithOrigins("http://localhost:5173")
-              .AllowAnyHeader()
-              .AllowAnyMethod());
+        { if (builder.Environment.IsDevelopment())
+            policy.AllowAnyOrigin();
+        else
+            policy.WithOrigins("http://localhost:5173");
+        
+        policy.AllowAnyHeader()
+              .AllowAnyMethod();
+        }
+              );
 });
 
 
