@@ -19,6 +19,12 @@ public record ConversationMessageDto(Guid Id, string Role, string Content, DateT
 public record ReflectionWithConversationDto(Guid Id, Guid PlayedCardId, string Text, DateTimeOffset CreatedAt, List<ConversationMessageDto> Messages, bool AiUnavailable);
 public record CurrentCardDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber, string? ReflectionText, List<ConversationMessageDto> Messages);
 
+public record SendMessageRequest(string Content);
+public record SendMessageResponse(ConversationMessageDto UserMessage, ConversationMessageDto AssistantMessage);
+public record ReplyResponse(ConversationMessageDto AssistantMessage);
+public record JourneySummaryDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, int CardCount);
+public record PlayedCardDetailDto(Guid Id, int SequenceNumber, int DiceResult, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, string? ReflectionText);
+public record JourneyDetailDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, List<PlayedCardDetailDto> PlayedCards);
 
 
 [ApiController]
@@ -32,9 +38,7 @@ public class JourneysController : ControllerBase
     private readonly IDiceService _diceService;
     private readonly ICardSelectionService _cardSelectionService;
     private readonly ConversationTurnService _conversationTurnService;
-    public record JourneySummaryDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, int CardCount);
-    public record PlayedCardDetailDto(Guid Id, int SequenceNumber, int DiceResult, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, string? ReflectionText);
-    public record JourneyDetailDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, List<PlayedCardDetailDto> PlayedCards);
+
 
     public JourneysController(
         ReflektaDbContext dbContext,
@@ -301,6 +305,96 @@ public class JourneysController : ControllerBase
             journey.StartedAt, journey.CompletedAt, playedCards));
     }
 
+    private const int MaxMessageLength = 2000;
+
+    /// <summary>
+    /// Loads the journey and its latest played card for a conversation action, or returns the
+    /// error result (404/403/400) that the caller should send back.
+    /// </summary>
+    private async Task<(Journey? Journey, PlayedCard? PlayedCard, ActionResult? Error)> LoadConversationTargetAsync(Guid journeyId, CancellationToken ct)
+    {
+        var userId = await _currentUserService.GetOrCreateCurrentUserIdAsync(ct);
+
+        var journey = await _dbContext.Journeys
+            .Include(j => j.PlayedCards)
+            .FirstOrDefaultAsync(j => j.Id == journeyId, ct);
+
+        if (journey is null)
+            return (null, null, NotFound());
+        if (journey.UserId != userId)
+            return (null, null, Forbid());
+        if (journey.Status != JourneyStatus.Active)
+            return (null, null, BadRequest("Journey is not active."));
+
+        var lastPlayed = journey.PlayedCards.OrderByDescending(pc => pc.SequenceNumber).FirstOrDefault();
+        if (lastPlayed is null)
+            return (null, null, BadRequest("Roll before starting a conversation."));
+
+        var hasReflection = await _dbContext.Reflections.AnyAsync(r => r.PlayedCardId == lastPlayed.Id, ct);
+        if (!hasReflection)
+            return (null, null, BadRequest("Write a reflection before starting a conversation."));
+
+        return (journey, lastPlayed, null);
+    }
+
+    [HttpPost("{journeyId:guid}/messages")]
+    public async Task<ActionResult<SendMessageResponse>> SendMessage(Guid journeyId, [FromBody] SendMessageRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Content))
+            return BadRequest("Message content is required.");
+        if (request.Content.Length > MaxMessageLength)
+            return BadRequest($"Message must be at most {MaxMessageLength} characters.");
+
+        var (journey, playedCard, error) = await LoadConversationTargetAsync(journeyId, ct);
+        if (error is not null)
+            return error;
+
+        var userMessage = new ConversationMessage
+        {
+            Id = Guid.NewGuid(),
+            PlayedCardId = playedCard!.Id,
+            Role = ConversationRoles.User,
+            Content = request.Content.Trim(),
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        _dbContext.ConversationMessages.Add(userMessage);
+        await _dbContext.SaveChangesAsync(ct);
+
+        try
+        {
+            var assistantMessage = await _conversationTurnService.ReplyAsync(journey!, playedCard, ct);
+            return Ok(new SendMessageResponse(ConversationMessageDto.From(userMessage), ConversationMessageDto.From(assistantMessage)));
+        }
+        catch (AiUnavailableException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "The AI facilitator is unavailable. Your message was saved.");
+        }
+    }
+
+    [HttpPost("{journeyId:guid}/messages/reply")]
+    public async Task<ActionResult<ReplyResponse>> RequestReply(Guid journeyId, CancellationToken ct)
+    {
+        var (journey, playedCard, error) = await LoadConversationTargetAsync(journeyId, ct);
+        if (error is not null)
+            return error;
+
+        var lastMessage = await _dbContext.ConversationMessages
+            .Where(m => m.PlayedCardId == playedCard!.Id)
+            .OrderByDescending(m => m.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+        if (lastMessage?.Role == ConversationRoles.Assistant)
+            return BadRequest("The latest message has already been answered.");
+
+        try
+        {
+            var assistantMessage = await _conversationTurnService.ReplyAsync(journey!, playedCard!, ct);
+            return Ok(new ReplyResponse(ConversationMessageDto.From(assistantMessage)));
+        }
+        catch (AiUnavailableException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "The AI facilitator is unavailable.");
+        }
+    }
 
 
 }
