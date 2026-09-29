@@ -28,6 +28,14 @@ builder.Services.AddAuthorization();
     
 builder.Services.AddSingleton<IDiceService, DiceService>();
 builder.Services.AddSingleton<ICardSelectionService, CardSelectionService>();
+builder.Services.Configure<AiServiceOptions>(builder.Configuration.GetSection("AiService"));
+builder.Services.AddHttpClient<IAiClient, HttpAiClient>((serviceProvider, client) =>
+{
+    var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<AiServiceOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
+
 
 
 builder.Services.AddCors(options =>

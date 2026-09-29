@@ -7,12 +7,15 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Reflekta.Api.Data;
+using Reflekta.Api.Services;
 
 namespace Reflekta.Api.Tests.TestInfrastructure;
 
 public class ReflektaWebApplicationFactory : WebApplicationFactory<Program>
 {
     public string DatabaseName { get; } = Guid.NewGuid().ToString();
+    public FakeAiClient AiClient => Services.GetRequiredService<FakeAiClient>();
+
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -32,6 +35,10 @@ public class ReflektaWebApplicationFactory : WebApplicationFactory<Program>
 
             services.AddAuthentication(TestAuthHandler.SchemeName)
                 .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+                        services.RemoveAll<IAiClient>();
+            services.AddSingleton<FakeAiClient>();
+            services.AddSingleton<IAiClient>(sp => sp.GetRequiredService<FakeAiClient>());
+
         });
     }
 }
