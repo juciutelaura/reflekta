@@ -12,6 +12,13 @@ public record RollResultDto(int DiceResult, Guid CardId, string CardTitle, strin
 public record SubmitReflectionRequest(string Text);
 public record ReflectionDto(Guid Id, Guid PlayedCardId, string Text, DateTimeOffset CreatedAt);
 public record JourneyDto(Guid Id, Guid IntentionId, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt);
+public record ConversationMessageDto(Guid Id, string Role, string Content, DateTimeOffset CreatedAt)
+{
+    public static ConversationMessageDto From(ConversationMessage m) => new(m.Id, m.Role, m.Content, m.CreatedAt);
+}
+public record ReflectionWithConversationDto(Guid Id, Guid PlayedCardId, string Text, DateTimeOffset CreatedAt, List<ConversationMessageDto> Messages, bool AiUnavailable);
+public record CurrentCardDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber, string? ReflectionText, List<ConversationMessageDto> Messages);
+
 
 
 [ApiController]
@@ -19,10 +26,12 @@ public record JourneyDto(Guid Id, Guid IntentionId, string Status, DateTimeOffse
 [Authorize]
 public class JourneysController : ControllerBase
 {
+    
     private readonly ReflektaDbContext _dbContext;
     private readonly ICurrentUserService _currentUserService;
     private readonly IDiceService _diceService;
     private readonly ICardSelectionService _cardSelectionService;
+    private readonly ConversationTurnService _conversationTurnService;
     public record JourneySummaryDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, int CardCount);
     public record PlayedCardDetailDto(Guid Id, int SequenceNumber, int DiceResult, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, string? ReflectionText);
     public record JourneyDetailDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, List<PlayedCardDetailDto> PlayedCards);
@@ -31,12 +40,14 @@ public class JourneysController : ControllerBase
         ReflektaDbContext dbContext,
         ICurrentUserService currentUserService,
         IDiceService diceService,
-        ICardSelectionService cardSelectionService)
+        ICardSelectionService cardSelectionService,
+        ConversationTurnService conversationTurnService)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _diceService = diceService;
         _cardSelectionService = cardSelectionService;
+        _conversationTurnService = conversationTurnService;
     }
 
     [HttpPost]
@@ -135,14 +146,26 @@ public class JourneysController : ControllerBase
         if (lastPlayed?.Card is null)
             return NotFound("No card has been played yet.");
 
-        return Ok(new RollResultDto(
+        var reflectionText = await _dbContext.Reflections
+            .Where(r => r.PlayedCardId == lastPlayed.Id)
+            .Select(r => r.Text)
+            .FirstOrDefaultAsync(ct);
+
+        var messages = await _dbContext.ConversationMessages
+            .Where(m => m.PlayedCardId == lastPlayed.Id)
+            .OrderBy(m => m.CreatedAt)
+            .ToListAsync(ct);
+
+        return Ok(new CurrentCardDto(
             lastPlayed.DiceResult, lastPlayed.Card.Id, lastPlayed.Card.Title, lastPlayed.Card.WisdomText,
-            lastPlayed.Card.ReflectionPrompt, lastPlayed.Card.Themes, lastPlayed.SequenceNumber));
+            lastPlayed.Card.ReflectionPrompt, lastPlayed.Card.Themes, lastPlayed.SequenceNumber,
+            reflectionText, messages.Select(ConversationMessageDto.From).ToList()));
+
     }
 
     
     [HttpPost("{journeyId:guid}/reflection")]
-    public async Task<ActionResult<ReflectionDto>> SubmitReflection(Guid journeyId, [FromBody] SubmitReflectionRequest request, CancellationToken ct)
+    public async Task<ActionResult<ReflectionWithConversationDto>> SubmitReflection(Guid journeyId, [FromBody] SubmitReflectionRequest request, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(request.Text))
             return BadRequest("Reflection text is required.");
@@ -177,7 +200,21 @@ public class JourneysController : ControllerBase
         _dbContext.Reflections.Add(reflection);
         await _dbContext.SaveChangesAsync(ct);
 
-        return Ok(new ReflectionDto(reflection.Id, reflection.PlayedCardId, reflection.Text, reflection.CreatedAt));
+        var messages = new List<ConversationMessageDto>();
+        var aiUnavailable = false;
+        try
+        {
+            var assistantMessage = await _conversationTurnService.ReplyAsync(journey, lastPlayed, ct);
+            messages.Add(ConversationMessageDto.From(assistantMessage));
+        }
+        catch (AiUnavailableException)
+        {
+            aiUnavailable = true;
+        }
+
+        return Ok(new ReflectionWithConversationDto(
+            reflection.Id, reflection.PlayedCardId, reflection.Text, reflection.CreatedAt, messages, aiUnavailable));
+
     }
 
     [HttpPost("{journeyId:guid}/complete")]
