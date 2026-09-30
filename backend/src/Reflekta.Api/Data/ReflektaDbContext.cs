@@ -15,6 +15,8 @@ public class ReflektaDbContext : DbContext
     public DbSet<PlayedCard> PlayedCards => Set<PlayedCard>();
     public DbSet<Reflection> Reflections => Set<Reflection>();
     public DbSet<ConversationMessage> ConversationMessages => Set<ConversationMessage>();
+    public DbSet<SessionSummary> SessionSummaries => Set<SessionSummary>();
+
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -61,6 +63,19 @@ public class ReflektaDbContext : DbContext
                 .HasForeignKey(m => m.PlayedCardId);
             e.HasIndex(m => new { m.PlayedCardId, m.CreatedAt });
         });
+
+        modelBuilder.Entity<SessionSummary>(e =>
+        {
+            e.Property(s => s.Themes).HasConversion(
+                v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                v => JsonSerializer.Deserialize<List<string>>(v, (JsonSerializerOptions?)null) ?? new List<string>());
+            e.HasOne<Journey>()
+                .WithOne()
+                .HasForeignKey<SessionSummary>(s => s.JourneyId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(s => s.JourneyId).IsUnique();
+        });
+
 
 
     }
