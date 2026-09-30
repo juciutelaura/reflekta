@@ -492,24 +492,22 @@ Potential retrieval sources include:
 Conceptually:
 
 ```text
-Current AI Request
+Current AI Request (ASP.NET Core)
+       │
+       ├── Python AI service: embed query text
+       │
+       ├── PostgreSQL + pgvector: similarity search
+       │      WHERE user_id = current user   ← ownership enforced in the query
+       │      LIMIT k
        │
        ▼
-Context Builder
+Selected context sent to the Python AI service
        │
-       ├──────────────► PostgreSQL
-       │                    │
-       │                    ▼
-       │              Semantic Retrieval
-       │                    │
-       └────────────────────┘
-                    │
-                    ▼
-              Selected Context
-                    │
-                    ▼
-                   LLM
+       ▼
+Context Builder → LLM
 ```
+
+Retrieval results are authorized by ASP.NET Core in the retrieval query itself; the LLM never decides what data a user may see. When agents are introduced, retrieval becomes a tool that calls an ASP.NET Core endpoint, which applies the same ownership filter.
 
 Retrieval should be introduced only when there is a measurable product or technical reason to use it.
 
@@ -630,6 +628,10 @@ POST /ai/journey/analyze
 These endpoints are internal service boundaries.
 
 The public frontend should not call the AI service directly.
+
+ASP.NET Core authenticates to the AI service with a shared secret in the `X-Internal-Key` header. The AI service port is bound to `127.0.0.1` in Docker Compose.
+
+ASP.NET Core loads and sends all context the AI operation needs (intention, card, reflection, conversation). The AI service never reads the database and never receives a user id; authorization stays in ASP.NET Core.
 
 ---
 
