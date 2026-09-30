@@ -237,6 +237,12 @@ Reasons:
 
 The Python service is not the owner of Reflekta's core business state.
 
+### Implementation (Phase 2b)
+
+- Framework: FastAPI (`fastapi[standard]`), managed with `uv`, Python 3.14.
+- Location: `ai-service/`. Internal only — called by ASP.NET Core, never by the frontend.
+- The service is stateless and has no database access: ASP.NET Core sends the full context for each operation.
+
 ---
 
 # 10. AI Orchestration
@@ -267,6 +273,8 @@ An agent should be introduced when the task genuinely benefits from:
 * stateful execution
 * autonomous task progression
 
+The reflection facilitator currently uses one plain LLM call per turn. The OpenAI Agents SDK will be introduced when a workflow needs real tools (for example retrieval through ASP.NET Core endpoints).
+
 ---
 
 # 11. LLM Provider
@@ -288,6 +296,8 @@ This makes it easier to change:
 * evaluation strategy
 
 without changing the core application.
+
+The service uses the OpenAI Responses API (`client.responses.create`). The model is configured with the `OPENAI_MODEL` environment variable.
 
 ---
 

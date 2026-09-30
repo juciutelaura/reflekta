@@ -25,6 +25,8 @@ services:
       ConnectionStrings__Default: "Host=postgres;Database=reflekta;Username=reflekta;Password=reflekta_dev_password"
       Clerk__Authority: "${CLERK_AUTHORITY}"
       ASPNETCORE_URLS: "http://+:8080"
+      AiService__BaseUrl: "http://ai-service:8000"
+      AiService__InternalKey: "${AI_INTERNAL_KEY}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,6 +42,17 @@ services:
       VITE_API_BASE_URL: "http://localhost:5080"
     depends_on:
       - backend
+
+  ai-service:
+    build:
+      context: ./ai-service
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      OPENAI_MODEL: "${OPENAI_MODEL}"
+      AI_INTERNAL_KEY: "${AI_INTERNAL_KEY}"
+    
 
 volumes:
   postgres_data:
