@@ -155,3 +155,45 @@
   padding: 12px 0;
   border-bottom: 1px solid var(--color-border);
 }
+
+.conversation {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: left;
+}
+
+.message-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.message {
+  padding: 12px 16px;
+  border-radius: 12px;
+  max-width: 85%;
+  white-space: pre-wrap;
+}
+
+.message-assistant {
+  align-self: flex-start;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-family: var(--font-serif);
+}
+
+.message-user {
+  align-self: flex-end;
+  background: var(--color-ink);
+  color: var(--color-bg);
+}
+
+.muted {
+  color: var(--color-muted);
+  font-size: 14px;
+}
