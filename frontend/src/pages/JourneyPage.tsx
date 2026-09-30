@@ -1,5 +1,7 @@
-import { useState } from "react";
-import type { ApiClient, RollResultDto } from "../lib/apiClient";
+import { useEffect, useState } from "react";
+import { ApiError } from "../lib/apiClient";
+import type { ApiClient, ConversationMessageDto, RollResultDto } from "../lib/apiClient";
+import { ReflectionConversation } from "../components/ReflectionConversation";
 
 interface JourneyPageProps {
   apiClient: ApiClient;
@@ -7,14 +9,52 @@ interface JourneyPageProps {
   onJourneyCompleted: () => void;
 }
 
+interface Conversation {
+  messages: ConversationMessageDto[];
+  aiUnavailable: boolean;
+}
+
+/** True when the reflection or the latest user message still waits for an AI reply. */
+function isAwaitingAiReply(messages: ConversationMessageDto[]): boolean {
+  return messages.length === 0 || messages[messages.length - 1].role === "user";
+}
+
 export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: JourneyPageProps) {
+  const [isLoading, setIsLoading] = useState(true);
   const [card, setCard] = useState<RollResultDto | null>(null);
   const [reflectionText, setReflectionText] = useState("");
   const [submittedReflection, setSubmittedReflection] = useState<string | null>(null);
+  const [conversation, setConversation] = useState<Conversation | null>(null);
   const [isRolling, setIsRolling] = useState(false);
   const [isSubmittingReflection, setIsSubmittingReflection] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+    apiClient
+      .getCurrentCard(journeyId)
+      .then((current) => {
+        if (ignore) return;
+        setCard(current);
+        setSubmittedReflection(current.reflectionText);
+        if (current.reflectionText !== null) {
+          setConversation({ messages: current.messages, aiUnavailable: isAwaitingAiReply(current.messages) });
+        }
+      })
+      .catch((caught) => {
+        if (ignore) return;
+        if (!(caught instanceof ApiError && caught.status === 404)) {
+          setError("Something went wrong. Please try again.");
+        }
+      })
+      .finally(() => {
+        if (!ignore) setIsLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [apiClient, journeyId]);
 
   async function handleRoll() {
     setError(null);
@@ -24,6 +64,7 @@ export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: Journe
       setCard(result);
       setReflectionText("");
       setSubmittedReflection(null);
+      setConversation(null);
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -36,8 +77,9 @@ export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: Journe
     setError(null);
     setIsSubmittingReflection(true);
     try {
-      await apiClient.submitReflection(journeyId, reflectionText);
-      setSubmittedReflection(reflectionText);
+      const result = await apiClient.submitReflection(journeyId, reflectionText);
+      setSubmittedReflection(result.text);
+      setConversation({ messages: result.messages, aiUnavailable: result.aiUnavailable });
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
@@ -56,6 +98,10 @@ export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: Journe
     } finally {
       setIsCompleting(false);
     }
+  }
+
+  if (isLoading) {
+    return <p>Loading…</p>;
   }
 
   return (
@@ -95,9 +141,18 @@ export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: Journe
         </form>
       )}
 
-      {submittedReflection !== null && (
+      {card && submittedReflection !== null && (
         <div className="stack">
           <p>{submittedReflection}</p>
+          {conversation && (
+            <ReflectionConversation
+              key={card.sequenceNumber}
+              apiClient={apiClient}
+              journeyId={journeyId}
+              initialMessages={conversation.messages}
+              initialAiUnavailable={conversation.aiUnavailable}
+            />
+          )}
           <button onClick={handleRoll} disabled={isRolling} className="btn">
             Continue journey
           </button>
