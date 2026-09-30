@@ -41,5 +41,16 @@ services:
     depends_on:
       - backend
 
+  ai-service:
+    build:
+      context: ./ai-service
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      OPENAI_API_KEY: "${OPENAI_API_KEY}"
+      OPENAI_MODEL: "${OPENAI_MODEL}"
+      AI_INTERNAL_KEY: "${AI_INTERNAL_KEY}"
+    
+
 volumes:
   postgres_data:
