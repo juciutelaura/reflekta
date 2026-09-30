@@ -25,6 +25,8 @@ services:
       ConnectionStrings__Default: "Host=postgres;Database=reflekta;Username=reflekta;Password=reflekta_dev_password"
       Clerk__Authority: "${CLERK_AUTHORITY}"
       ASPNETCORE_URLS: "http://+:8080"
+      AiService__BaseUrl: "http://ai-service:8000"
+      AiService__InternalKey: "${AI_INTERNAL_KEY}"
     depends_on:
       postgres:
         condition: service_healthy
