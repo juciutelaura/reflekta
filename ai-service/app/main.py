@@ -8,9 +8,9 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 
-from app import facilitator
+from app import facilitator, summarizer
 from app.llm_client import LlmClient, LlmError, OpenAiLlmClient
-from app.schemas import ReflectionReply, ReflectionRequest
+from app.schemas import ReflectionReply, ReflectionRequest, SummaryReply, SummaryRequest
 from app.settings import Settings
 
 logger = logging.getLogger("reflekta.ai")
@@ -60,3 +60,23 @@ async def reflection_respond(
 
     logger.info("Reflection reply generated in %.0f ms", (time.perf_counter() - started) * 1000)
     return ReflectionReply(reply=reply)
+
+
+@app.post(
+    "/ai/session/summarize",
+    response_model=SummaryReply,
+    dependencies=[Depends(require_internal_key)],
+)
+async def session_summarize(
+    request: SummaryRequest,
+    llm: Annotated[LlmClient, Depends(get_llm_client)],
+) -> SummaryReply:
+    started = time.perf_counter()
+    try:
+        reply = await summarizer.summarize(request, llm)
+    except LlmError as error:
+        logger.warning("Session summary failed: %s", error)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="AI provider unavailable.") from error
+
+    logger.info("Session summary generated in %.0f ms", (time.perf_counter() - started) * 1000)
+    return reply
