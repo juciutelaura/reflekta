@@ -30,3 +30,23 @@ class ReflectionRequest(CamelModel):
 
 class ReflectionReply(CamelModel):
     reply: str
+
+class SummaryCard(CamelModel):
+    title: str = Field(min_length=1)
+    wisdom_text: str = Field(min_length=1)
+
+
+class SummaryPlayedCard(CamelModel):
+    card: SummaryCard
+    reflection_text: str = Field(min_length=1)
+    messages: list[Message] = []
+
+
+class SummaryRequest(CamelModel):
+    intention: str = Field(min_length=1)
+    played_cards: list[SummaryPlayedCard] = Field(min_length=1)
+
+
+class SummaryReply(CamelModel):
+    summary_text: str = Field(min_length=1)
+    themes: list[str]
