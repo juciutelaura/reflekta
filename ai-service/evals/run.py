@@ -9,12 +9,13 @@ from pydantic import BaseModel
 from app.facilitator import respond
 from app.llm_client import OpenAiLlmClient
 from app.settings import Settings
-from evals.scenarios import SCENARIOS, Scenario
+from app.summarizer import summarize
+from evals.scenarios import SCENARIOS, SUMMARY_SCENARIOS, Scenario, SummaryScenario
 
 JUDGE_INSTRUCTIONS = """\
-You evaluate one reply from a self-reflection facilitator. You receive the conversation context, \
-the facilitator's reply and the expected behavior. Decide strictly whether the reply meets the \
-expected behavior. Return passed and a one-sentence reason."""
+You evaluate one reply from a self-reflection facilitator or session summarizer. You receive the \
+conversation context, the reply and the expected behavior. Decide strictly whether the reply \
+meets the expected behavior. Return passed and a one-sentence reason."""
 
 
 class Verdict(BaseModel):
@@ -26,7 +27,7 @@ def at_most_one_question(reply: str) -> bool:
     return reply.count("?") <= 1
 
 
-async def judge(client: AsyncOpenAI, model: str, scenario: Scenario, reply: str) -> Verdict:
+async def judge(client: AsyncOpenAI, model: str, scenario: Scenario | SummaryScenario, reply: str) -> Verdict:
     response = await client.responses.parse(
         model=model,
         instructions=JUDGE_INSTRUCTIONS,
@@ -42,12 +43,13 @@ async def judge(client: AsyncOpenAI, model: str, scenario: Scenario, reply: str)
 
 async def main() -> int:
     settings = Settings()
-    facilitator_llm = OpenAiLlmClient(settings.openai_api_key, settings.openai_model)
+    llm = OpenAiLlmClient(settings.openai_api_key, settings.openai_model)
     judge_client = AsyncOpenAI(api_key=settings.openai_api_key)
 
     failures = 0
+
     for scenario in SCENARIOS:
-        reply = await respond(scenario.request, facilitator_llm)
+        reply = await respond(scenario.request, llm)
         verdict = await judge(judge_client, settings.openai_model, scenario, reply)
         one_question = at_most_one_question(reply)
         passed = verdict.passed and one_question
@@ -59,7 +61,18 @@ async def main() -> int:
         if not one_question:
             print("      rule:  more than one question")
 
-    print(f"\n{len(SCENARIOS) - failures}/{len(SCENARIOS)} scenarios passed")
+    for scenario in SUMMARY_SCENARIOS:
+        summary = await summarize(scenario.request, llm)
+        verdict = await judge(judge_client, settings.openai_model, scenario, summary.summary_text)
+        failures += not verdict.passed
+
+        print(f"{'PASS' if verdict.passed else 'FAIL'}  {scenario.name}")
+        print(f"      summary: {summary.summary_text}")
+        print(f"      themes:  {summary.themes}")
+        print(f"      judge: {verdict.reason}")
+
+    total = len(SCENARIOS) + len(SUMMARY_SCENARIOS)
+    print(f"\n{total - failures}/{total} scenarios passed")
     return 1 if failures else 0
 
 
