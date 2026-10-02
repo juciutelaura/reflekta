@@ -370,9 +370,12 @@ public class JourneysController : ControllerBase
                 reflectionsByPlayedCardId.GetValueOrDefault(pc.Id)))
             .ToList();
 
+        var summary = await _dbContext.SessionSummaries.FirstOrDefaultAsync(s => s.JourneyId == journeyId, ct);
+
         return Ok(new JourneyDetailDto(
             journey.Id, journey.Intention!.OriginalText, journey.Status.ToString(),
-            journey.StartedAt, journey.CompletedAt, playedCards));
+            journey.StartedAt, journey.CompletedAt, playedCards,
+            summary is null ? null : SessionSummaryDto.From(summary)));
     }
 
     private const int MaxMessageLength = 2000;
