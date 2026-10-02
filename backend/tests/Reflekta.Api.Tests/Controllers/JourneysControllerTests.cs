@@ -309,5 +309,132 @@ public class JourneysControllerTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
+        [Fact]
+    public async Task CompleteJourney_GeneratesASessionSummary()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("I grip plans tightly."));
+
+        await _client.PostAsync($"/api/journeys/{journey.Id}/complete", null);
+        var summaryResponse = await _client.GetAsync($"/api/journeys/{journey.Id}/summary");
+
+        summaryResponse.EnsureSuccessStatusCode();
+        var summary = await summaryResponse.Content.ReadFromJsonAsync<SessionSummaryDto>();
+        Assert.Equal(journey.Id, summary!.JourneyId);
+        Assert.Equal(_factory.AiClient.SummaryText, summary.SummaryText);
+        Assert.Equal(_factory.AiClient.SummaryThemes, summary.Themes);
+    }
+
+    [Fact]
+    public async Task CompleteJourney_WhenTheAiIsUnavailable_StillCompletes()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("I grip plans tightly."));
+        _factory.AiClient.SummaryFail = true;
+
+        var completeResponse = await _client.PostAsync($"/api/journeys/{journey.Id}/complete", null);
+
+        completeResponse.EnsureSuccessStatusCode();
+        var completed = await completeResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        Assert.Equal("Completed", completed!.Status);
+        var summaryResponse = await _client.GetAsync($"/api/journeys/{journey.Id}/summary");
+        Assert.Equal(HttpStatusCode.NotFound, summaryResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task RetrySummary_AfterTheAiRecovers_GeneratesTheSummary()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("I grip plans tightly."));
+        _factory.AiClient.SummaryFail = true;
+        await _client.PostAsync($"/api/journeys/{journey.Id}/complete", null);
+        _factory.AiClient.SummaryFail = false;
+
+        var retryResponse = await _client.PostAsync($"/api/journeys/{journey.Id}/summary/retry", null);
+
+        retryResponse.EnsureSuccessStatusCode();
+        var summary = await retryResponse.Content.ReadFromJsonAsync<SessionSummaryDto>();
+        Assert.Equal(_factory.AiClient.SummaryText, summary!.SummaryText);
+    }
+
+    [Fact]
+    public async Task RetrySummary_WhenASummaryAlreadyExists_ReturnsBadRequest()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("I grip plans tightly."));
+        await _client.PostAsync($"/api/journeys/{journey.Id}/complete", null);
+
+        var retryResponse = await _client.PostAsync($"/api/journeys/{journey.Id}/summary/retry", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, retryResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task RetrySummary_BeforeTheJourneyIsCompleted_ReturnsBadRequest()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("I grip plans tightly."));
+
+        var retryResponse = await _client.PostAsync($"/api/journeys/{journey.Id}/summary/retry", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, retryResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task GetSummary_OnAnotherUsersJourney_ReturnsForbidden()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("Mine."));
+        await _client.PostAsync($"/api/journeys/{journey.Id}/complete", null);
+
+        AuthenticateAs("user-2");
+        var response = await _client.GetAsync($"/api/journeys/{journey.Id}/summary");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task JourneyDetail_AfterCompletion_IncludesTheSummary()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("I grip plans tightly."));
+        await _client.PostAsync($"/api/journeys/{journey.Id}/complete", null);
+
+        var detailResponse = await _client.GetAsync($"/api/journeys/{journey.Id}");
+
+        var detail = await detailResponse.Content.ReadFromJsonAsync<JourneyDetailDto>();
+        Assert.NotNull(detail!.Summary);
+        Assert.Equal(_factory.AiClient.SummaryText, detail.Summary!.SummaryText);
+    }
+
+
 
 }

@@ -16,6 +16,9 @@ public record ConversationMessageDto(Guid Id, string Role, string Content, DateT
 {
     public static ConversationMessageDto From(ConversationMessage m) => new(m.Id, m.Role, m.Content, m.CreatedAt);
 }
+
+public record JourneyDetailDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, List<PlayedCardDetailDto> PlayedCards, SessionSummaryDto? Summary);
+
 public record ReflectionWithConversationDto(Guid Id, Guid PlayedCardId, string Text, DateTimeOffset CreatedAt, List<ConversationMessageDto> Messages, bool AiUnavailable);
 public record CurrentCardDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber, string? ReflectionText, List<ConversationMessageDto> Messages);
 
@@ -24,7 +27,11 @@ public record SendMessageResponse(ConversationMessageDto UserMessage, Conversati
 public record ReplyResponse(ConversationMessageDto AssistantMessage);
 public record JourneySummaryDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, int CardCount);
 public record PlayedCardDetailDto(Guid Id, int SequenceNumber, int DiceResult, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, string? ReflectionText);
-public record JourneyDetailDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, List<PlayedCardDetailDto> PlayedCards);
+
+public record SessionSummaryDto(Guid Id, Guid JourneyId, string SummaryText, List<string> Themes, DateTimeOffset CreatedAt)
+{
+    public static SessionSummaryDto From(SessionSummary s) => new(s.Id, s.JourneyId, s.SummaryText, s.Themes, s.CreatedAt);
+}
 
 
 [ApiController]
@@ -38,6 +45,8 @@ public class JourneysController : ControllerBase
     private readonly IDiceService _diceService;
     private readonly ICardSelectionService _cardSelectionService;
     private readonly ConversationTurnService _conversationTurnService;
+    private readonly SessionSummaryService _sessionSummaryService;
+
 
 
     public JourneysController(
@@ -45,14 +54,17 @@ public class JourneysController : ControllerBase
         ICurrentUserService currentUserService,
         IDiceService diceService,
         ICardSelectionService cardSelectionService,
-        ConversationTurnService conversationTurnService)
+        ConversationTurnService conversationTurnService,
+        SessionSummaryService sessionSummaryService)
     {
         _dbContext = dbContext;
         _currentUserService = currentUserService;
         _diceService = diceService;
         _cardSelectionService = cardSelectionService;
         _conversationTurnService = conversationTurnService;
+        _sessionSummaryService = sessionSummaryService;
     }
+
 
     [HttpPost]
     public async Task<ActionResult<JourneyDto>> Create([FromBody] CreateJourneyRequest request, CancellationToken ct)
@@ -249,9 +261,67 @@ public class JourneysController : ControllerBase
         journey.CompletedAt = DateTimeOffset.UtcNow;
         await _dbContext.SaveChangesAsync(ct);
 
+        try
+        {
+            await _sessionSummaryService.GenerateAsync(journey, ct);
+        }
+        catch (AiUnavailableException)
+        {
+            // The journey still completes; the user can retry generating the summary later.
+        }
+
+
         return Ok(new JourneyDto(journey.Id, journey.IntentionId, journey.Status.ToString(), journey.StartedAt, journey.CompletedAt));
     }
-        
+    
+    [HttpGet("{journeyId:guid}/summary")]
+    public async Task<ActionResult<SessionSummaryDto>> GetSummary(Guid journeyId, CancellationToken ct)
+    {
+        var userId = await _currentUserService.GetOrCreateCurrentUserIdAsync(ct);
+
+        var journey = await _dbContext.Journeys.FirstOrDefaultAsync(j => j.Id == journeyId, ct);
+        if (journey is null)
+            return NotFound();
+        if (journey.UserId != userId)
+            return Forbid();
+
+        var summary = await _dbContext.SessionSummaries.FirstOrDefaultAsync(s => s.JourneyId == journeyId, ct);
+        if (summary is null)
+            return NotFound();
+
+        return Ok(SessionSummaryDto.From(summary));
+    }
+
+    [HttpPost("{journeyId:guid}/summary/retry")]
+    public async Task<ActionResult<SessionSummaryDto>> RetrySummary(Guid journeyId, CancellationToken ct)
+    {
+        var userId = await _currentUserService.GetOrCreateCurrentUserIdAsync(ct);
+
+        var journey = await _dbContext.Journeys.FirstOrDefaultAsync(j => j.Id == journeyId, ct);
+        if (journey is null)
+            return NotFound();
+        if (journey.UserId != userId)
+            return Forbid();
+        if (journey.Status != JourneyStatus.Completed)
+            return BadRequest("Complete the journey before generating a summary.");
+
+        var alreadyExists = await _dbContext.SessionSummaries.AnyAsync(s => s.JourneyId == journeyId, ct);
+        if (alreadyExists)
+            return BadRequest("This journey already has a summary.");
+
+        try
+        {
+            var summary = await _sessionSummaryService.GenerateAsync(journey, ct);
+            return Ok(SessionSummaryDto.From(summary));
+        }
+        catch (AiUnavailableException)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, "The AI facilitator is unavailable.");
+        }
+    }
+
+
+
     [HttpGet]
     public async Task<ActionResult<List<JourneySummaryDto>>> List(CancellationToken ct)
     {
@@ -395,6 +465,8 @@ public class JourneysController : ControllerBase
             return StatusCode(StatusCodes.Status503ServiceUnavailable, "The AI facilitator is unavailable.");
         }
     }
+
+    
 
 
 }

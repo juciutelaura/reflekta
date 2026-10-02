@@ -13,6 +13,8 @@ builder.Services.AddDbContext<ReflektaDbContext>(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<ConversationTurnService>();
+builder.Services.AddScoped<SessionSummaryService>();
+
 
 
 builder.Services.AddAuthentication(Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme).AddJwtBearer(options =>
