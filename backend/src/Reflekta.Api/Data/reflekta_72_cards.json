@@ -1,0 +1,664 @@
+{
+  "schema_version": "1.0",
+  "language": "lt",
+  "deck_name": "Reflekta — 72 originalios refleksijos kortelės",
+  "description": "Originalios Reflekta kortelės, laisvai įkvėptos bendrų savirefleksijos temų. Tai nėra originalių Leela kortelių tekstų ar tikslaus tradicinio 72 pozicijų sąrašo kopija.",
+  "ai_facilitator_rules": [
+    "Nelaikyk kortelės pranašyste ar objektyvia žinute apie vartotoją.",
+    "Nedaryk prielaidos, kad kortelė susijusi su vartotojo pradine intencija; paklausk, ar pats vartotojas mato ryšį.",
+    "Vienu metu užduok vieną atvirą klausimą.",
+    "Nediagnozuok, neprimetinėk emocijų, motyvų ar išvadų.",
+    "Gerbk vartotojo teisę nesutikti, praleisti klausimą ar sustoti.",
+    "Papildomus klausimus rinkis pagal vartotojo atsakymą, o ne užduok juos visus iš karto."
+  ],
+  "cards": [
+    {
+      "id": "reflekta-01",
+      "position": 1,
+      "theme": "Pradžia",
+      "title": "Pradžia",
+      "core_message": "Kiekviena pradžia dar neturi galutinės formos.",
+      "reflection_question": "Kas tavo gyvenime šiuo metu galbūt prasideda, net jei dar nežinai, kuo tai taps?",
+      "ai_follow_up_directions": "Paklausk, ką žmogus pastebi; kas jam kelia smalsumą ar neapibrėžtumą; ko jis norėtų sau leisti pradžioje."
+    },
+    {
+      "id": "reflekta-02",
+      "position": 2,
+      "theme": "Iliuzijos",
+      "title": "Iliuzijos",
+      "core_message": "Tai, ką laikome savaime suprantamu dalyku, kartais tėra viena iš galimų interpretacijų.",
+      "reflection_question": "Kurią savo prielaidą galėtum trumpam palaikyti hipoteze, o ne faktu?",
+      "ai_follow_up_directions": "Atskirk stebimus faktus nuo prielaidų; paklausk, kokie įrodymai palaiko ar silpnina interpretaciją."
+    },
+    {
+      "id": "reflekta-03",
+      "position": 3,
+      "theme": "Pyktis",
+      "title": "Pyktis",
+      "core_message": "Stipri reakcija kartais parodo, kad kažkas tau svarbu.",
+      "reflection_question": "Jei tavo pyktis galėtų papasakoti, kas tau svarbu, ką jis pasakytų?",
+      "ai_follow_up_directions": "Tyrinėk situaciją, ribas ir vertybes, bet nediagnozuok ir neteigk, ką žmogus jaučia."
+    },
+    {
+      "id": "reflekta-04",
+      "position": 4,
+      "theme": "Troškimas",
+      "title": "Troškimas",
+      "core_message": "Norėti kažko gali būti būdas pastebėti, kas tau svarbu.",
+      "reflection_question": "Ko iš tiesų tikiesi gauti, patirti ar apsaugoti tuo, ko dabar trokšti?",
+      "ai_follow_up_directions": "Padėk atskirti patį norą nuo poreikio ar vertybės; palik galimybę, kad žmogus dar nežino."
+    },
+    {
+      "id": "reflekta-05",
+      "position": 5,
+      "theme": "Kasdienybė",
+      "title": "Kasdienybė",
+      "core_message": "Net įprastos aplinkybės gali atskleisti pasirinkimus, kurių nepastebime.",
+      "reflection_question": "Kuri tavo kasdienybės dalis šiuo metu labiausiai veikia tavo savijautą ar sprendimus?",
+      "ai_follow_up_directions": "Klausk apie konkrečius įpročius, aplinkybes ir mažus pakeitimus, ne apie abstrakčias asmens savybes."
+    },
+    {
+      "id": "reflekta-06",
+      "position": 6,
+      "theme": "Susipainiojimas",
+      "title": "Susipainiojimas",
+      "core_message": "Kai daug minčių susipina, pirmas žingsnis gali būti jas atskirti.",
+      "reflection_question": "Kas šioje situacijoje tau aišku, o kas kol kas lieka neaišku?",
+      "ai_follow_up_directions": "Padėk išskirti faktus, klausimus ir nežinomybę; neskubėk spręsti už vartotoją."
+    },
+    {
+      "id": "reflekta-07",
+      "position": 7,
+      "theme": "Puikybė",
+      "title": "Puikybė",
+      "core_message": "Kartais noras pasirodyti stipriam užgožia tai, ko iš tiesų reikia.",
+      "reflection_question": "Kurioje situacijoje tau sunku parodyti, kad dar kažko nežinai ar tau reikia pagalbos?",
+      "ai_follow_up_directions": "Tyrinėk lūkesčius ir pažeidžiamumą be gėdinimo; pasiūlyk pažiūrėti į alternatyvas."
+    },
+    {
+      "id": "reflekta-08",
+      "position": 8,
+      "theme": "Pavydas",
+      "title": "Pavydas",
+      "core_message": "Palyginimas su kitais gali atkreipti dėmesį į mūsų pačių troškimus.",
+      "reflection_question": "Ką tau atskleidžia tai, ko pavydi kitam žmogui?",
+      "ai_follow_up_directions": "Klausk, kokia vertybė ar noras slypi palyginime; venk moralizuoti."
+    },
+    {
+      "id": "reflekta-09",
+      "position": 9,
+      "theme": "Malonumas",
+      "title": "Malonumas",
+      "core_message": "Malonumas gali būti svarbus, tačiau ne visada parodo, kas ilgainiui tau tinka.",
+      "reflection_question": "Kokį malonumą norėtum įsileisti daugiau, o kur norėtum daugiau sąmoningo pasirinkimo?",
+      "ai_follow_up_directions": "Tyrinėk trumpalaikę ir ilgalaikę naudą, nevertindamas vartotojo pasirinkimų."
+    },
+    {
+      "id": "reflekta-10",
+      "position": 10,
+      "theme": "Pastangos",
+      "title": "Pastangos",
+      "core_message": "Pastangos gali padėti judėti pirmyn, bet jos nebūtinai turi būti begalinės.",
+      "reflection_question": "Kurios pastangos šiuo metu tau atrodo prasmingos, o kurios galbūt tik sekina?",
+      "ai_follow_up_directions": "Padėk įvardyti tikslą, kainą ir alternatyvas; neskatink perdegimo."
+    },
+    {
+      "id": "reflekta-11",
+      "position": 11,
+      "theme": "Kūrybiškumas",
+      "title": "Kūrybiškumas",
+      "core_message": "Nauja galimybė kartais atsiranda pakeitus klausimą.",
+      "reflection_question": "Ką galėtum išbandyti, jei nereikėtų iškart rasti tobulo sprendimo?",
+      "ai_follow_up_directions": "Siūlyk mažus eksperimentus ir kelias galimybes, bet neleisk pasirinkimams tapti nurodymais."
+    },
+    {
+      "id": "reflekta-12",
+      "position": 12,
+      "theme": "Dosnumas",
+      "title": "Dosnumas",
+      "core_message": "Dalintis galima įvairiai, taip pat išsaugant savo ribas.",
+      "reflection_question": "Ką norėtum duoti kitiems, neprarasdamas ryšio su savo poreikiais?",
+      "ai_follow_up_directions": "Tyrinėk abipusiškumą, ribas ir savanoriškumą."
+    },
+    {
+      "id": "reflekta-13",
+      "position": 13,
+      "theme": "Baimė",
+      "title": "Baimė",
+      "core_message": "Baimė gali signalizuoti apie riziką, nežinomybę ar tai, kas tau svarbu.",
+      "reflection_question": "Ko šioje situacijoje labiausiai bijai netekti arba patirti?",
+      "ai_follow_up_directions": "Atskirk realias rizikas nuo neaiškumo; nepateik baimės kaip pranašystės."
+    },
+    {
+      "id": "reflekta-14",
+      "position": 14,
+      "theme": "Pasitikėjimas",
+      "title": "Pasitikėjimas",
+      "core_message": "Pasitikėjimas dažnai auga per mažus patikrinamus veiksmus.",
+      "reflection_question": "Kokie konkretūs ženklai padėtų tau šioje situacijoje labiau pasitikėti savimi ar kitu?",
+      "ai_follow_up_directions": "Klausk apie įrodymus, nuoseklumą ir ribas; venk tuščio užtikrinimo."
+    },
+    {
+      "id": "reflekta-15",
+      "position": 15,
+      "theme": "Lūkesčiai",
+      "title": "Lūkesčiai",
+      "core_message": "Lūkesčiai gali padėti orientuotis, bet kartais tampa nematomomis taisyklėmis.",
+      "reflection_question": "Kokio rezultato tikiesi, ir ar esi sau pasakęs, kodėl būtent jo?",
+      "ai_follow_up_directions": "Atskirk norą, pareigą ir kitų žmonių lūkesčius."
+    },
+    {
+      "id": "reflekta-16",
+      "position": 16,
+      "theme": "Atsakomybė",
+      "title": "Atsakomybė",
+      "core_message": "Atsakomybė prasideda nuo to, ką iš tiesų gali paveikti.",
+      "reflection_question": "Kuri šios situacijos dalis priklauso nuo tavęs, o kuri – ne?",
+      "ai_follow_up_directions": "Padėk atskirti kontrolės sritį ir išorinius veiksnius, nepermesk visos naštos vartotojui."
+    },
+    {
+      "id": "reflekta-17",
+      "position": 17,
+      "theme": "Atjauta",
+      "title": "Atjauta",
+      "core_message": "Atjauta leidžia pažvelgti į sunkumą neatsisakant aiškumo.",
+      "reflection_question": "Kaip galėtum į šią situaciją pažvelgti su daugiau supratimo sau ar kitam?",
+      "ai_follow_up_directions": "Tyrinėk kontekstą ir poreikius, bet nereikalauk atleisti ar pateisinti žalingo elgesio."
+    },
+    {
+      "id": "reflekta-18",
+      "position": 18,
+      "theme": "Ribos",
+      "title": "Ribos",
+      "core_message": "Ribos padeda apibrėžti, kas tau priimtina ir ko tau reikia.",
+      "reflection_question": "Kur norėtum aiškiau išreikšti savo ribą?",
+      "ai_follow_up_directions": "Klausk, ką žmogus norėtų pasakyti ar padaryti; palaikyk saugumą ir autonomiją."
+    },
+    {
+      "id": "reflekta-19",
+      "position": 19,
+      "theme": "Neapibrėžtumas",
+      "title": "Neapibrėžtumas",
+      "core_message": "Ne viską galima žinoti prieš žengiant kitą žingsnį.",
+      "reflection_question": "Ką galėtum nuspręsti dabar, net jei dar neturi visų atsakymų?",
+      "ai_follow_up_directions": "Padėk įvardyti trūkstamą informaciją ir mažą saugų žingsnį."
+    },
+    {
+      "id": "reflekta-20",
+      "position": 20,
+      "theme": "Kantrybė",
+      "title": "Kantrybė",
+      "core_message": "Kai kurie dalykai keičiasi lėčiau, nei norėtume.",
+      "reflection_question": "Kam tavo gyvenime šiuo metu reikia laiko, o kam – veiksmo?",
+      "ai_follow_up_directions": "Atskirk laukimą nuo vengimo; nesakyk, kad viskas savaime susitvarkys."
+    },
+    {
+      "id": "reflekta-21",
+      "position": 21,
+      "theme": "Atleidimas",
+      "title": "Atleidimas",
+      "core_message": "Atleidimas kiekvienam gali reikšti ką nors skirtingo ir nėra privalomas.",
+      "reflection_question": "Ką tau reikštų paleisti dalį šio įvykio naštos, jei apskritai to norėtum?",
+      "ai_follow_up_directions": "Nespausk atleisti; atskirk atleidimą nuo susitaikymo ar ribų atsisakymo."
+    },
+    {
+      "id": "reflekta-22",
+      "position": 22,
+      "theme": "Praradimas",
+      "title": "Praradimas",
+      "core_message": "Praradimas gali pakeisti tai, ką laikome svarbiu.",
+      "reflection_question": "Ko šioje situacijoje ilgiesi, ir ką norėtum išsaugoti savo atmintyje?",
+      "ai_follow_up_directions": "Leisk žmogui pačiam pasirinkti gylį; neprimetinėk pozityvios prasmės."
+    },
+    {
+      "id": "reflekta-23",
+      "position": 23,
+      "theme": "Pokytis",
+      "title": "Pokytis",
+      "core_message": "Pokytis gali būti ir pasirinktas, ir netikėtas.",
+      "reflection_question": "Ką šiuo metu norėtum pakeisti, o ką išlaikyti taip, kaip yra?",
+      "ai_follow_up_directions": "Tyrinėk abiejų krypčių priežastis ir mažus žingsnius."
+    },
+    {
+      "id": "reflekta-24",
+      "position": 24,
+      "theme": "Drąsa",
+      "title": "Drąsa",
+      "core_message": "Drąsa nebūtinai reiškia baimės nebuvimą.",
+      "reflection_question": "Koks mažas veiksmas tau būtų drąsus, bet vis tiek pakankamai saugus?",
+      "ai_follow_up_directions": "Padėk noteikt riskus un resursus; neskatink neapdomingos rizikos."
+    },
+    {
+      "id": "reflekta-25",
+      "position": 25,
+      "theme": "Sąžiningumas",
+      "title": "Sąžiningumas",
+      "core_message": "Sąžiningumas prasideda nuo aiškumo sau, net kai atsakymas nepatogus.",
+      "reflection_question": "Ką sau jau žinai, bet dar sunku pripažinti ar įvardyti?",
+      "ai_follow_up_directions": "Palik teisę neatsakyti; atskirk faktą, interpretaciją ir vertinimą."
+    },
+    {
+      "id": "reflekta-26",
+      "position": 26,
+      "theme": "Pasirinkimas",
+      "title": "Pasirinkimas",
+      "core_message": "Pasirinkimas dažnai reiškia ne tik tai, ką pasirenkame, bet ir ko atsisakome.",
+      "reflection_question": "Kokie du dalykai tau svarbiausi renkantis tarp šių galimybių?",
+      "ai_follow_up_directions": "Padėk įvardyti kriterijus, kompromisus ir grįžtamumą."
+    },
+    {
+      "id": "reflekta-27",
+      "position": 27,
+      "theme": "Laisvė",
+      "title": "Laisvė",
+      "core_message": "Laisvė gali reikšti daugiau galimybių arba aiškesnį įsipareigojimą.",
+      "reflection_question": "Kur norėtum turėti daugiau pasirinkimo laisvės?",
+      "ai_follow_up_directions": "Tyrinėk realias galimybes ir apribojimus, neidealizuok visiškos nepriklausomybės."
+    },
+    {
+      "id": "reflekta-28",
+      "position": 28,
+      "theme": "Įprotis",
+      "title": "Įprotis",
+      "core_message": "Pasikartojantys veiksmai dažnai formuoja kasdienę patirtį.",
+      "reflection_question": "Koks mažas įprotis tau padeda, o kurį norėtum peržiūrėti?",
+      "ai_follow_up_directions": "Klausk apie situacijų signalus, lengvesnius pakeitimus ir palaikymą."
+    },
+    {
+      "id": "reflekta-29",
+      "position": 29,
+      "theme": "Dėmesys",
+      "title": "Dėmesys",
+      "core_message": "Tai, kam skiriame dėmesį, formuoja tai, ką pastebime.",
+      "reflection_question": "Kur šiuo metu norėtum sąmoningai nukreipti daugiau dėmesio?",
+      "ai_follow_up_directions": "Padėk pasirinkti vieną konkretų dalyką ir pastebėti dėmesio ribas."
+    },
+    {
+      "id": "reflekta-30",
+      "position": 30,
+      "theme": "Kūnas",
+      "title": "Kūnas",
+      "core_message": "Kūno pojūčiai kartais suteikia informacijos apie dabartinę patirtį.",
+      "reflection_question": "Ką pastebi savo kūne, kai galvoji apie šią situaciją?",
+      "ai_follow_up_directions": "Nediagnozuok pojūčių ir nesuteik jiems vienos privalomos reikšmės."
+    },
+    {
+      "id": "reflekta-31",
+      "position": 31,
+      "theme": "Tyla",
+      "title": "Tyla",
+      "core_message": "Pauzė gali suteikti vietos minčiai, kuri dar nesusiformavo.",
+      "reflection_question": "Kas galėtų paaiškėti, jei trumpam nustotum ieškoti atsakymo?",
+      "ai_follow_up_directions": "Leisk būti tylai ar nežinojimui; nespausk dalintis."
+    },
+    {
+      "id": "reflekta-32",
+      "position": 32,
+      "theme": "Santykiai",
+      "title": "Santykiai",
+      "core_message": "Santykiuose susitinka skirtingi poreikiai, ribos ir lūkesčiai.",
+      "reflection_question": "Ko norėtum, kad kitas žmogus geriau suprastų apie tavo požiūrį?",
+      "ai_follow_up_directions": "Tyrinėk abiejų perspektyvas, neapsimesk žinantis kito žmogaus mintis."
+    },
+    {
+      "id": "reflekta-33",
+      "position": 33,
+      "theme": "Bendravimas",
+      "title": "Bendravimas",
+      "core_message": "Tai, ką norime pasakyti, ne visada sutampa su tuo, ką kitas išgirsta.",
+      "reflection_question": "Ką norėtum pasakyti aiškiau arba paklausti tiesiau?",
+      "ai_follow_up_directions": "Padėk formuluoti aiškią, pagarbią žinutę; venk manipuliacijos."
+    },
+    {
+      "id": "reflekta-34",
+      "position": 34,
+      "theme": "Vienatvė",
+      "title": "Vienatvė",
+      "core_message": "Buvimas vienam ir vienišumo jausmas nėra tas pats.",
+      "reflection_question": "Kokio ryšio ar erdvės tau dabar labiausiai trūksta?",
+      "ai_follow_up_directions": "Tyrinėk norimą ryšį ir galimus mažus veiksmus be gėdinimo."
+    },
+    {
+      "id": "reflekta-35",
+      "position": 35,
+      "theme": "Bendruomenė",
+      "title": "Bendruomenė",
+      "core_message": "Priklausymo jausmas gali augti ten, kur gali būti savimi.",
+      "reflection_question": "Kur jautiesi priimamas, o kur turi slėpti svarbią savo dalį?",
+      "ai_follow_up_directions": "Klausk apie konkrečias patirtis ir saugumo jausmą."
+    },
+    {
+      "id": "reflekta-36",
+      "position": 36,
+      "theme": "Sąmoningumas",
+      "title": "Sąmoningumas",
+      "core_message": "Pastebėti savo mintį nėra tas pats, kas privalėti ja jausti ar tikėti.",
+      "reflection_question": "Kokią mintį šiuo metu pastebi, ir kaip ji veikia tavo pasirinkimą?",
+      "ai_follow_up_directions": "Atskirk mintį nuo fakto; venk psichologinių diagnozių."
+    },
+    {
+      "id": "reflekta-37",
+      "position": 37,
+      "theme": "Įžvalga",
+      "title": "Įžvalga",
+      "core_message": "Įžvalga gali prasidėti nuo mažo neatitikimo tarp to, ką manei, ir to, ką pastebi.",
+      "reflection_question": "Kas šioje situacijoje atrodo kitaip, nei iš pradžių manei?",
+      "ai_follow_up_directions": "Klausk, kas pasikeitė ir kokios alternatyvios interpretacijos galimos."
+    },
+    {
+      "id": "reflekta-38",
+      "position": 38,
+      "theme": "Perspektyva",
+      "title": "Perspektyva",
+      "core_message": "Vienas požiūris retai aprėpia visą situaciją.",
+      "reflection_question": "Kaip ši situacija galėtų atrodyti iš kito žmogaus ar tavo ateities „aš“ perspektyvos?",
+      "ai_follow_up_directions": "Siūlyk perspektyvą kaip eksperimentą, ne kaip tiesą."
+    },
+    {
+      "id": "reflekta-39",
+      "position": 39,
+      "theme": "Vertybės",
+      "title": "Vertybės",
+      "core_message": "Vertybės tampa aiškesnės, kai tenka rinktis tarp svarbių dalykų.",
+      "reflection_question": "Kokią vertybę norėtum išsaugoti priimdamas šį sprendimą?",
+      "ai_follow_up_directions": "Padėk įvardyti vertybes vartotojo žodžiais, neprimetinėk jų."
+    },
+    {
+      "id": "reflekta-40",
+      "position": 40,
+      "theme": "Prasmė",
+      "title": "Prasmė",
+      "core_message": "Prasmė nebūtinai būna atrandama iš karto; kartais ją susikuriame.",
+      "reflection_question": "Kas šioje patirtyje tau atrodo svarbu, net jei ji nėra lengva?",
+      "ai_follow_up_directions": "Nesakyk, kad sunkumai įvyko dėl priežasties; tyrinėk asmeninę prasmę."
+    },
+    {
+      "id": "reflekta-41",
+      "position": 41,
+      "theme": "Priėmimas",
+      "title": "Priėmimas",
+      "core_message": "Priėmimas nereiškia, kad viskam pritariame.",
+      "reflection_question": "Ką šioje situacijoje gali pripažinti esant tikra, net jei norėtum, kad būtų kitaip?",
+      "ai_follow_up_directions": "Atskirk pripažinimą nuo pritarimo ar pasidavimo."
+    },
+    {
+      "id": "reflekta-42",
+      "position": 42,
+      "theme": "Pasipriešinimas",
+      "title": "Pasipriešinimas",
+      "core_message": "Pasipriešinimas kartais saugo tai, ko nenorime prarasti.",
+      "reflection_question": "Kam, tavo manymu, šis pasipriešinimas bando padėti?",
+      "ai_follow_up_directions": "Pateik tai kaip galimą tyrinėjimą, ne kaip nustatytą motyvą."
+    },
+    {
+      "id": "reflekta-43",
+      "position": 43,
+      "theme": "Pusiausvyra",
+      "title": "Pusiausvyra",
+      "core_message": "Pusiausvyra nėra visko padalijimas po lygiai; ji priklauso nuo aplinkybių.",
+      "reflection_question": "Kur šiuo metu norėtum daugiau pusiausvyros?",
+      "ai_follow_up_directions": "Tyrinėk prioritetus, energiją ir realias aplinkybes."
+    },
+    {
+      "id": "reflekta-44",
+      "position": 44,
+      "theme": "Poilsis",
+      "title": "Poilsis",
+      "core_message": "Poilsis gali būti poreikis, o ne atlygis už atliktą darbą.",
+      "reflection_question": "Kas tau trukdo pailsėti tiek, kiek norėtum?",
+      "ai_follow_up_directions": "Tyrinėk praktines kliūtis ir kaltės jausmą, nevertink produktyvumo kaip žmogaus vertės."
+    },
+    {
+      "id": "reflekta-45",
+      "position": 45,
+      "theme": "Rizika",
+      "title": "Rizika",
+      "core_message": "Kiekvienas sprendimas turi nežinomų dalių ir skirtingą galimų pasekmių kainą.",
+      "reflection_question": "Kokią riziką esi pasirengęs prisiimti, o kokios nenori?",
+      "ai_follow_up_directions": "Padėk įvertinti tikimybę, pasekmes ir atsarginius planus; nepateik garantijų."
+    },
+    {
+      "id": "reflekta-46",
+      "position": 46,
+      "theme": "Atsparumas",
+      "title": "Atsparumas",
+      "core_message": "Atsparumas gali reikšti ne tik ištverti, bet ir ieškoti pagalbos ar keisti kryptį.",
+      "reflection_question": "Kas tau anksčiau padėjo išbūti sudėtingoje situacijoje?",
+      "ai_follow_up_directions": "Primink apie išteklius ir paramą, neidealizuok kančios."
+    },
+    {
+      "id": "reflekta-47",
+      "position": 47,
+      "theme": "Pažeidžiamumas",
+      "title": "Pažeidžiamumas",
+      "core_message": "Parodyti, kad kažkas svarbu, gali reikalauti pasitikėjimo ir ribų.",
+      "reflection_question": "Kur norėtum būti atviresnis, o kur tau svarbu išlaikyti privatumą?",
+      "ai_follow_up_directions": "Pabrėžk pasirinkimą, saugumą ir teisę neatskleisti."
+    },
+    {
+      "id": "reflekta-48",
+      "position": 48,
+      "theme": "Kontrolė",
+      "title": "Kontrolė",
+      "core_message": "Ne viską galime valdyti, bet galime pasirinkti savo veiksmus ir ribas.",
+      "reflection_question": "Ką šioje situacijoje bandai kontroliuoti, ir ar tai tikrai tavo galioje?",
+      "ai_follow_up_directions": "Atskirk įtaką, kontrolę ir priėmimą be kaltinimo."
+    },
+    {
+      "id": "reflekta-49",
+      "position": 49,
+      "theme": "Lūkesčių paleidimas",
+      "title": "Lūkesčių paleidimas",
+      "core_message": "Kartais sunkumą didina ne tik situacija, bet ir įsivaizduotas jos scenarijus.",
+      "reflection_question": "Kokio scenarijaus laikaisi, ir kas pasikeistų, jei paliktum vietos kitokiai baigčiai?",
+      "ai_follow_up_directions": "Tyrinėk lūkesčių lankstumą, neskatindamas atsisakyti svarbių tikslų."
+    },
+    {
+      "id": "reflekta-50",
+      "position": 50,
+      "theme": "Rūpestis savimi",
+      "title": "Rūpestis savimi",
+      "core_message": "Rūpestis savimi gali būti konkretus veiksmas, o ne vien idėja.",
+      "reflection_question": "Kokio mažo rūpesčio sau tau dabar iš tikrųjų reikia?",
+      "ai_follow_up_directions": "Ieškok įgyvendinamo veiksmo, atsižvelk į resursus ir apribojimus."
+    },
+    {
+      "id": "reflekta-51",
+      "position": 51,
+      "theme": "Dėkingumas",
+      "title": "Dėkingumas",
+      "core_message": "Dėkingumas gali padėti pastebėti tai, kas palaiko, nepaneigiant sunkumų.",
+      "reflection_question": "Kas tavo gyvenime šiuo metu suteikia bent truputį atramos?",
+      "ai_follow_up_directions": "Nereikalauk pozityvumo; priimk atsakymą, kad žmogui sunku ką nors rasti."
+    },
+    {
+      "id": "reflekta-52",
+      "position": 52,
+      "theme": "Netekties baimė",
+      "title": "Netekties baimė",
+      "core_message": "Kartais sprendimą veikia ne tik tai, ko tikimės gauti, bet ir ko bijome netekti.",
+      "reflection_question": "Ko bijai netekti, jei pasirinktum kitą kelią?",
+      "ai_follow_up_directions": "Padėk atskirti tikėtiną praradimą nuo įsivaizduojamo ir įvardyti kompromisus."
+    },
+    {
+      "id": "reflekta-53",
+      "position": 53,
+      "theme": "Viltis",
+      "title": "Viltis",
+      "core_message": "Viltis gali būti ne garantija, o galimybė veikti nežinant rezultato.",
+      "reflection_question": "Kokią galimybę vis dar norėtum palikti atvirą?",
+      "ai_follow_up_directions": "Venk pažadų; ieškok realistiškų veiksmų ir paramos."
+    },
+    {
+      "id": "reflekta-54",
+      "position": 54,
+      "theme": "Kantrybė sau",
+      "title": "Kantrybė sau",
+      "core_message": "Mokymasis ir keitimasis retai vyksta tiesia linija.",
+      "reflection_question": "Kaip kalbėtum su artimu žmogumi, kuris atsidūrė tavo situacijoje?",
+      "ai_follow_up_directions": "Padėk pastebėti savikritikos toną ir galimą švelnesnę formuluotę."
+    },
+    {
+      "id": "reflekta-55",
+      "position": 55,
+      "theme": "Ribotas laikas",
+      "title": "Ribotas laikas",
+      "core_message": "Laikas ribotas, todėl pasirinkimai atskleidžia prioritetus.",
+      "reflection_question": "Kam norėtum skirti daugiau savo laiko, jei galėtum pasirinkti?",
+      "ai_follow_up_directions": "Tyrinėk realius laiko apribojimus ir prioritetus, nekurk spaudimo."
+    },
+    {
+      "id": "reflekta-56",
+      "position": 56,
+      "theme": "Sprendimas",
+      "title": "Sprendimas",
+      "core_message": "Sprendimas nebūtinai panaikina abejones; jis gali padėti judėti toliau.",
+      "reflection_question": "Kokios informacijos tau dar reikia, kad galėtum pasirinkti kitą žingsnį?",
+      "ai_follow_up_directions": "Atskirk grįžtamus ir sunkiai grįžtamus sprendimus; nepasirink už vartotoją."
+    },
+    {
+      "id": "reflekta-57",
+      "position": 57,
+      "theme": "Veiksmas",
+      "title": "Veiksmas",
+      "core_message": "Mažas konkretus veiksmas kartais suteikia daugiau aiškumo nei ilgas svarstymas.",
+      "reflection_question": "Koks būtų mažiausias prasmingas žingsnis, kurį galėtum žengti?",
+      "ai_follow_up_directions": "Padėk veiksmą padaryti konkretų, mažą ir patikrinamą."
+    },
+    {
+      "id": "reflekta-58",
+      "position": 58,
+      "theme": "Atidėliojimas",
+      "title": "Atidėliojimas",
+      "core_message": "Atidėliojimas gali turėti daug priežasčių, ne vien valios stoką.",
+      "reflection_question": "Kas labiausiai apsunkina pirmą žingsnį?",
+      "ai_follow_up_directions": "Tyrinėk neaiškumą, užduoties dydį, energiją ar baimę be gėdinimo."
+    },
+    {
+      "id": "reflekta-59",
+      "position": 59,
+      "theme": "Smalsumas",
+      "title": "Smalsumas",
+      "core_message": "Smalsumas leidžia klausti dar nenusprendus, koks turi būti atsakymas.",
+      "reflection_question": "Ką norėtum geriau suprasti, užuot iškart vertinęs?",
+      "ai_follow_up_directions": "Skatink atvirus klausimus ir mažus tyrinėjimus."
+    },
+    {
+      "id": "reflekta-60",
+      "position": 60,
+      "theme": "Mokymasis",
+      "title": "Mokymasis",
+      "core_message": "Patirtis tampa mokymusi, kai pastebime, ką iš jos pasiimame.",
+      "reflection_question": "Ką ši patirtis tau parodė apie tai, kas tau veikia arba neveikia?",
+      "ai_follow_up_directions": "Atskirk vieną patirtį nuo universalių išvadų apie save."
+    },
+    {
+      "id": "reflekta-61",
+      "position": 61,
+      "theme": "Klaida",
+      "title": "Klaida",
+      "core_message": "Klaida gali suteikti informacijos apie metodą, lūkestį ar sąlygas.",
+      "reflection_question": "Ką galėtum iš šios klaidos sužinoti, nekeldamas klausimo apie savo vertę?",
+      "ai_follow_up_directions": "Nemenkink pasekmių, bet atskirk rezultatą nuo asmens vertės."
+    },
+    {
+      "id": "reflekta-62",
+      "position": 62,
+      "theme": "Sėkmė",
+      "title": "Sėkmė",
+      "core_message": "Sėkmę galima apibrėžti savais kriterijais, o ne vien išoriniais matavimais.",
+      "reflection_question": "Kaip pats apibrėžtum sėkmę šioje situacijoje?",
+      "ai_follow_up_directions": "Tyrinėk asmeninius ir išorinius kriterijus; neprimetinėk vieno apibrėžimo."
+    },
+    {
+      "id": "reflekta-63",
+      "position": 63,
+      "theme": "Paprastumas",
+      "title": "Paprastumas",
+      "core_message": "Kartais aiškumas atsiranda sumažinus tai, ką bandome vienu metu spręsti.",
+      "reflection_question": "Ką galėtum supaprastinti, kad svarbiausias dalykas taptų aiškesnis?",
+      "ai_follow_up_directions": "Ieškok nereikalingų žingsnių ar konkuruojančių prioritetų."
+    },
+    {
+      "id": "reflekta-64",
+      "position": 64,
+      "theme": "Atvirumas",
+      "title": "Atvirumas",
+      "core_message": "Atvirumas gali reikšti norą apsvarstyti kitą idėją, neprarandant savo sprendimo teisės.",
+      "reflection_question": "Kokią kitokią galimybę galėtum apsvarstyti, net jei dar jai nepritari?",
+      "ai_follow_up_directions": "Pateik alternatyvą kaip tyrinėjimą, ne kaip teisingesnę nuomonę."
+    },
+    {
+      "id": "reflekta-65",
+      "position": 65,
+      "theme": "Nuoseklumas",
+      "title": "Nuoseklumas",
+      "core_message": "Maži pasikartojantys veiksmai gali palaikyti tai, kas tau svarbu.",
+      "reflection_question": "Ką norėtum tęsti, net jei pažanga būtų lėta?",
+      "ai_follow_up_directions": "Padėk apibrėžti realų ritmą ir peržiūros tašką."
+    },
+    {
+      "id": "reflekta-66",
+      "position": 66,
+      "theme": "Pokyčio kaina",
+      "title": "Pokyčio kaina",
+      "core_message": "Kiekvienas pokytis gali turėti naudų ir kainą.",
+      "reflection_question": "Ką galėtum laimėti ir ko galėtum netekti, jei keistum šią situaciją?",
+      "ai_follow_up_directions": "Palygink galimas pasekmes ir neapibrėžtumą, neprognozuok tikrai."
+    },
+    {
+      "id": "reflekta-67",
+      "position": 67,
+      "theme": "Susitaikymas su nežinomybe",
+      "title": "Susitaikymas su nežinomybe",
+      "core_message": "Nežinomybė nebūtinai turi būti išspręsta prieš gyvenant toliau.",
+      "reflection_question": "Ką gali padaryti, nors galutinio atsakymo dar neturi?",
+      "ai_follow_up_directions": "Ieškok valdomo kito žingsnio ir to, ką galima palikti atvirą."
+    },
+    {
+      "id": "reflekta-68",
+      "position": 68,
+      "theme": "Atjauta sau",
+      "title": "Atjauta sau",
+      "core_message": "Savęs supratimas nebūtinai reiškia pateisinti kiekvieną savo veiksmą.",
+      "reflection_question": "Kaip galėtum pripažinti savo klaidą ir kartu elgtis su savimi pagarbiai?",
+      "ai_follow_up_directions": "Sujunk atsakomybę su pagarba sau; venk kraštutinumų."
+    },
+    {
+      "id": "reflekta-69",
+      "position": 69,
+      "theme": "Sąmoningas pasirinkimas",
+      "title": "Sąmoningas pasirinkimas",
+      "core_message": "Automatinė reakcija ir apgalvotas pasirinkimas ne visada sutampa.",
+      "reflection_question": "Kokią reakciją norėtum pakeisti sąmoningu veiksmu?",
+      "ai_follow_up_directions": "Padėk pastebėti pauzę tarp impulso ir veiksmo, nevertink žmogaus."
+    },
+    {
+      "id": "reflekta-70",
+      "position": 70,
+      "theme": "Atviras klausimas",
+      "title": "Atviras klausimas",
+      "core_message": "Kartais geresnis klausimas atveria daugiau nei skubotas atsakymas.",
+      "reflection_question": "Kokį klausimą sau dar galėtum užduoti apie šią situaciją?",
+      "ai_follow_up_directions": "Padėk suformuluoti klausimą, kuris būtų konkretus ir nevestų prie numatyto atsakymo."
+    },
+    {
+      "id": "reflekta-71",
+      "position": 71,
+      "theme": "Integracija",
+      "title": "Integracija",
+      "core_message": "Įžvalga tampa prasmingesnė, kai susiejama su kasdieniu gyvenimu.",
+      "reflection_question": "Ką iš šios refleksijos norėtum pasiimti į savo kasdienybę?",
+      "ai_follow_up_directions": "Padėk suformuluoti asmeninę, pasirenkamą išvadą arba veiksmą."
+    },
+    {
+      "id": "reflekta-72",
+      "position": 72,
+      "theme": "Džiaugsmas",
+      "title": "Džiaugsmas",
+      "core_message": "Džiaugsmas gali būti pastebimas ir mažuose, neįspūdinguose dalykuose.",
+      "reflection_question": "Kada pastaruoju metu jauteisi gyvas, įsitraukęs ar nuoširdžiai patenkintas?",
+      "ai_follow_up_directions": "Tyrinėk konkrečias aplinkybes, nesakydamas, kad žmogus privalo jaustis gerai."
+    }
+  ]
+}
