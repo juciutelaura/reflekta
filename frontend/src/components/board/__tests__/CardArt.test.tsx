@@ -4,8 +4,6 @@ import { CardArt } from "../CardArt";
 
 describe("CardArt", () => {
   it("renders an img pointing at the card's position file", () => {
-    render(<CardArt boardPosition={0} cardId="11111111-1111-1111-1111-111111111111" />);
-
     const { container } = render(
       <CardArt boardPosition={0} cardId="11111111-1111-1111-1111-111111111111" />,
     );
