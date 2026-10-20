@@ -1,0 +1,74 @@
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+
+.board-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.board-cell--closed::before,
+.board-cell--flash::before {
+  content: "";
+  display: block;
+  width: 70%;
+  height: 2px;
+  background: var(--color-muted);
+  border-radius: 2px;
+  box-shadow:
+    0 -4px 0 -1px var(--color-muted),
+    0 4px 0 -1px var(--color-muted);
+}
+
+.board-cell--flash::before {
+  animation: board-cell-flash 150ms ease-in-out;
+}
+
+@keyframes board-cell-flash {
+  50% {
+    background: var(--color-ink);
+    box-shadow:
+      0 -4px 0 -1px var(--color-ink),
+      0 4px 0 -1px var(--color-ink);
+  }
+}
+
+.board-cell--open,
+.board-cell--opening {
+  width: 100%;
+  height: 72%;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-ink);
+  overflow: hidden;
+}
+
+.board-cell--open .card-art,
+.board-cell--opening .card-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.board-cell--opening {
+  animation: board-cell-open 400ms ease-out;
+}
+
+@keyframes board-cell-open {
+  from {
+    transform: scaleY(0.1);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
