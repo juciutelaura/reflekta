@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
+import "./JourneyPage.css";
 import { ApiError } from "../lib/apiClient";
 import type { ApiClient, ConversationMessageDto, RollResultDto } from "../lib/apiClient";
 import { ReflectionConversation } from "../components/ReflectionConversation";
+import { BoardGrid } from "../components/board/BoardGrid";
+import type { OpenPosition } from "../components/board/BoardGrid";
+import { DicePanel } from "../components/board/DicePanel";
+import { VisitedGallery } from "../components/board/VisitedGallery";
+import type { VisitedCard } from "../components/board/VisitedGallery";
+import { BOARD_SIZE, animationSteps } from "../components/board/boardLayout";
 
 interface JourneyPageProps {
   apiClient: ApiClient;
@@ -19,8 +26,16 @@ function isAwaitingAiReply(messages: ConversationMessageDto[]): boolean {
   return messages.length === 0 || messages[messages.length - 1].role === "user";
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: JourneyPageProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const [intentionText, setIntentionText] = useState("");
+  const [openPositions, setOpenPositions] = useState<OpenPosition[]>([]);
+  const [visitedCards, setVisitedCards] = useState<VisitedCard[]>([]);
+  const [animatingPosition, setAnimatingPosition] = useState<number | null>(null);
   const [card, setCard] = useState<RollResultDto | null>(null);
   const [reflectionText, setReflectionText] = useState("");
   const [submittedReflection, setSubmittedReflection] = useState<string | null>(null);
@@ -32,35 +47,67 @@ export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: Journe
 
   useEffect(() => {
     let ignore = false;
-    apiClient
-      .getCurrentCard(journeyId)
-      .then((current) => {
+
+    async function load() {
+      try {
+        const detail = await apiClient.getJourneyDetail(journeyId);
+        if (ignore) return;
+        setIntentionText(detail.intentionText);
+        setOpenPositions(detail.playedCards.map((pc) => ({ boardPosition: pc.boardPosition, cardId: pc.cardId })));
+        setVisitedCards(
+          detail.playedCards.map((pc) => ({ cardId: pc.cardId, cardTitle: pc.cardTitle, boardPosition: pc.boardPosition })),
+        );
+      } catch {
+        // The board still renders fully closed; the current-card fetch below still lets play continue.
+      }
+
+      try {
+        const current = await apiClient.getCurrentCard(journeyId);
         if (ignore) return;
         setCard(current);
         setSubmittedReflection(current.reflectionText);
         if (current.reflectionText !== null) {
           setConversation({ messages: current.messages, aiUnavailable: isAwaitingAiReply(current.messages) });
         }
-      })
-      .catch((caught) => {
-        if (ignore) return;
+      } catch (caught) {
         if (!(caught instanceof ApiError && caught.status === 404)) {
           setError("Something went wrong. Please try again.");
         }
-      })
-      .finally(() => {
-        if (!ignore) setIsLoading(false);
-      });
+      }
+    }
+
+    load().finally(() => {
+      if (!ignore) setIsLoading(false);
+    });
     return () => {
       ignore = true;
     };
   }, [apiClient, journeyId]);
 
   async function handleRoll() {
+    if (isRolling) return;
     setError(null);
     setIsRolling(true);
     try {
+      const startPosition = card?.boardPosition ?? 0;
       const result = await apiClient.rollDice(journeyId);
+      const steps = animationSteps(startPosition, result.diceResult);
+
+      for (const step of steps.slice(0, -1)) {
+        setAnimatingPosition(step);
+        await sleep(150);
+      }
+
+      const landingPosition = steps[steps.length - 1];
+      setOpenPositions((current) => [...current, { boardPosition: result.boardPosition, cardId: result.cardId }]);
+      setVisitedCards((current) => [
+        ...current,
+        { cardId: result.cardId, cardTitle: result.cardTitle, boardPosition: result.boardPosition },
+      ]);
+      setAnimatingPosition(landingPosition);
+      await sleep(400);
+      setAnimatingPosition(null);
+
       setCard(result);
       setReflectionText("");
       setSubmittedReflection(null);
@@ -105,68 +152,79 @@ export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: Journe
   }
 
   return (
-    <div className="stack">
-      {!card && (
-        <button onClick={handleRoll} disabled={isRolling} className="btn">
-          Roll
-        </button>
-      )}
+    <div className="board-page">
+      <header className="board-page__intention">
+        <p>{intentionText}</p>
+      </header>
 
-      {card && (
-        <article className="card">
-          <h2>{card.cardTitle}</h2>
-          <p>{card.cardWisdomText}</p>
-          <p className="prompt">{card.cardReflectionPrompt}</p>
-        </article>
-      )}
+      <div className="board-page__layout">
+        <BoardGrid openPositions={openPositions} animatingPosition={animatingPosition} />
 
-      {card && submittedReflection === null && (
-        <form className="stack" onSubmit={handleSubmitReflection}>
-          <div className="field">
-            <label htmlFor="reflection-text">Your reflection</label>
-            <textarea
-              id="reflection-text"
-              value={reflectionText}
-              onChange={(event) => setReflectionText(event.target.value)}
-              placeholder="What came up for you?"
-            />
-          </div>
-          <button
-            type="submit"
-            className="btn"
-            disabled={isSubmittingReflection || reflectionText.trim().length === 0}
-          >
-            Save reflection
-          </button>
-        </form>
-      )}
+        <aside className="board-page__sidebar">
+          <DicePanel
+            onRoll={handleRoll}
+            isRolling={isRolling}
+            disabled={card !== null && submittedReflection === null}
+          />
 
-      {card && submittedReflection !== null && (
-        <div className="stack">
-          <p>{submittedReflection}</p>
-          {conversation && (
-            <ReflectionConversation
-              key={card.sequenceNumber}
-              apiClient={apiClient}
-              journeyId={journeyId}
-              initialMessages={conversation.messages}
-              initialAiUnavailable={conversation.aiUnavailable}
-            />
-          )}
-          <button onClick={handleRoll} disabled={isRolling} className="btn">
-            Continue journey
-          </button>
-          <button onClick={handleComplete} disabled={isCompleting} className="btn btn-ghost">
-            Complete journey
-          </button>
-        </div>
-      )}
+          <VisitedGallery visitedCards={visitedCards} totalBoardSize={BOARD_SIZE} />
 
-      {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
-      )}
+          <section className="board-page__reflection">
+            {card && (
+              <article className="card">
+                <h2>{card.cardTitle}</h2>
+                <p>{card.cardWisdomText}</p>
+                <p className="prompt">{card.cardReflectionPrompt}</p>
+              </article>
+            )}
+
+            {card && submittedReflection === null && (
+              <form className="stack" onSubmit={handleSubmitReflection}>
+                <div className="field">
+                  <label htmlFor="reflection-text">Your reflection</label>
+                  <textarea
+                    id="reflection-text"
+                    value={reflectionText}
+                    onChange={(event) => setReflectionText(event.target.value)}
+                    placeholder="What came up for you?"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="btn"
+                  disabled={isSubmittingReflection || reflectionText.trim().length === 0}
+                >
+                  Save reflection
+                </button>
+              </form>
+            )}
+
+            {card && submittedReflection !== null && (
+              <div className="stack">
+                <p>{submittedReflection}</p>
+                {conversation && (
+                  <ReflectionConversation
+                    key={card.sequenceNumber}
+                    apiClient={apiClient}
+                    journeyId={journeyId}
+                    initialMessages={conversation.messages}
+                    initialAiUnavailable={conversation.aiUnavailable}
+                  />
+                )}
+                <button onClick={handleComplete} disabled={isCompleting} className="btn btn-ghost">
+                  Complete journey
+                </button>
+              </div>
+            )}
+
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+          </section>
+        </aside>
+      </div>
     </div>
   );
 }

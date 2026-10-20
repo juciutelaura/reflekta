@@ -1,0 +1,112 @@
+.board-page {
+  width: 100%;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  text-align: left;
+}
+
+.board-page__intention {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  color: var(--color-muted);
+}
+
+.board-page__layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+.board-page__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.dice-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.dice-button {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  border: 0;
+  background: var(--color-ink);
+  color: var(--color-bg);
+  font-size: 28px;
+  cursor: pointer;
+}
+
+.dice-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dice-button--rolling {
+  animation: dice-shake 150ms ease-in-out infinite;
+}
+
+@keyframes dice-shake {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+}
+
+.dice-panel__hint {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.visited-gallery__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.visited-gallery__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.visited-gallery__item {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.visited-gallery__item .card-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (min-width: 768px) {
+  .board-page__layout {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    align-items: start;
+  }
+}
