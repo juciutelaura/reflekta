@@ -8709,3 +8709,1665 @@ Review the Actions tab on the PR, confirm every required job is green, then merg
 ---
 
 **Phase 3 plan complete and appended to `docs/plan.md`.**
+
+# Reflekta Phase 4 — Interactive Journey Board
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Replace the active-journey page's plain text flow with an interactive 72-cell board of eye-shaped cells (closed until visited, open with a placeholder icon once landed on), a dice button that animates the token step-by-step to its new position, a gallery of opened cards, and the existing reflection/AI conversation relocated into a side panel.
+
+**Architecture:** Three small additive backend DTO fields (no new endpoints, no migrations) expose data that already exists in the domain model. All new UI lives in `frontend/src/components/board/` as small, independently testable pieces (pure layout math, an icon set, a grid, a dice button, a gallery), composed together by a restructured `JourneyPage.tsx`, which keeps owning every API call and all animation/orchestration state — the new components stay presentational.
+
+**Tech Stack:** ASP.NET Core / EF Core (existing), React 19 + TypeScript + Vitest + Testing Library (existing), plain CSS with the project's existing `--color-*`/`--font-*` custom properties (no new dependency).
+
+**Spec:** `docs/superpowers/specs/2026-10-15-interactive-board-design.md`
+
+## Global Constraints
+
+- No new backend endpoints, database migrations, or AI service changes (spec, "Out of scope").
+- `BOARD_COLUMNS × BOARD_ROWS` must equal 72 exactly, matching the seeded deck size (spec, "Board layout math").
+- Unvisited cells render with no number and no icon — closed eye only (spec, "Cell states").
+- No distinct "current position" visual marker exists — the most recently opened eye is the only indicator (spec, "Cell states", confirmed with the user 2026-10-19).
+- Reuse the existing visual tokens (`--color-bg`, `--color-ink`, `--color-surface`, `--color-border`, `--color-muted`, `--font-serif`, `--font-sans`) — no new color palette (spec, "Context").
+- `ReflectionConversation` is reused unmodified — no AI prompt or backend AI behavior changes (spec, "Out of scope").
+
+## Review Focus
+
+- Rolling across the 72-cell wraparound boundary (e.g. from position 70 with a dice result of 5) must land on position 3, not overflow, go negative, or crash — Task 42.
+- A brand-new journey (zero played cards) must render all 72 cells closed and the gallery as "0/72", never throw on an empty `playedCards` array — Tasks 44 and 46.
+- `getJourneyDetail` failing on page load must not block the board/dice/current-card from still rendering — Task 47.
+- Clicking the dice button a second time while a roll is already animating must not trigger a second concurrent roll — Task 47.
+- The placeholder-icon hash must handle a card id GUID in any hex casing without throwing or producing `NaN` — Task 42.
+
+## Deviations from the spec (found while planning, with reasoning)
+
+- **Dropped `CurrentCardDto.IntentionText`:** the spec proposed adding it, but `JourneyPage` already needs a `getJourneyDetail` call for `openPositions` (Task 47), and `JourneyDetailDto.IntentionText` already exists and covers the header — adding a second copy of the same text to a different DTO would be redundant. `CurrentCardDto` gets no intention-related change in this plan.
+- **Added `Guid CardId` to `PlayedCardDetailDto`** (spec only listed `BoardPosition`): the placeholder-icon system (`iconForCard(cardId)`) needs a stable *deck-card* identity for "the same card always shows the same icon" to hold across journeys, not just within one journey's played-card rows. `PlayedCardDetailDto` had no field carrying the underlying `Card.Id` at all.
+- **`DicePanel` is fully presentational** (spec's "Dice and animation" section reads as if `DicePanel` owns the animation loop): the spec's own "Error handling" section says `DicePanel` must not call the API directly, and the animation needs to update `JourneyPage`'s `openPositions` state at the exact moment it updates `animatingPosition` (so `BoardGrid` sees both changes together and renders the "opening" transition instead of a transient "flash"). Both constraints are satisfied by keeping the roll API call and the whole step/animation sequence in `JourneyPage.handleRoll`, with `DicePanel` reduced to a button that reports clicks and renders a rolling/disabled visual state. This does not change any user-visible behavior described in the spec.
+- **Real timers, not fake timers, in `JourneyPage` roll tests:** mixing Vitest fake timers with the existing chain of resolved promises (`apiClient.rollDice` → `sleep` → state updates → `ReflectionConversation`'s own async calls) is fragile. Animation step delays are short (150ms/400ms); tests instead pass a generous explicit `waitFor` timeout. `DicePanel.test.tsx` itself needs no timers at all, since it no longer owns any animation.
+- **Added `CardArt` and `cardImageSrc`** (2026-10-19, after the spec and the rest of this plan were written): the user started placing real card illustrations in `frontend/public/cards/`, renamed to `{1-indexed position, zero-padded}.png` (e.g. `01.png`), with 4 of 72 present so far. The spec's placeholder-icon system (`BoardIcon`/`iconForCard`) is kept as a fallback rather than replaced — `CardArt` renders the real `<img>` and falls back to `BoardIcon` on `onError`, so the board already works with a partial illustration set and needs no further code change as more are added. `VisitedGallery`'s `VisitedCard` type gained a `boardPosition` field (needed to build the image path) that the original spec/plan didn't have.
+
+---
+
+### Task 41: Backend — expose `BoardPosition` and `CardId` on the journey DTOs
+
+**Files:**
+- Modify: `backend/src/Reflekta.Api/Controllers/JourneysController.cs`
+- Modify: `backend/tests/Reflekta.Api.Tests/Controllers/JourneysControllerTests.cs`
+- Modify: `backend/tests/Reflekta.Api.Tests/Controllers/JourneyHistoryTests.cs`
+- Modify: `frontend/src/lib/apiClient.ts`
+
+**Interfaces:**
+- Produces: `RollResultDto.BoardPosition` (int), `CurrentCardDto.BoardPosition` (int), `PlayedCardDetailDto.BoardPosition` (int) and `PlayedCardDetailDto.CardId` (Guid/string) — consumed by every later task in this plan.
+
+- [ ] **Step 1: Write the failing backend tests**
+
+In `backend/tests/Reflekta.Api.Tests/Controllers/JourneysControllerTests.cs`, add two assertions to the end of the existing `Roll_AdvancesFromThePreviousCardsBoardPosition` test (right after the existing `firstPosition`/`secondPosition` assertions), and a new test:
+
+```csharp
+        Assert.Equal(1, firstPosition);
+        Assert.Equal(2, secondPosition);
+        Assert.Equal(1, first!.BoardPosition);
+        Assert.Equal(2, second!.BoardPosition);
+    }
+```
+
+```csharp
+    [Fact]
+    public async Task CurrentCard_IncludesTheCardsBoardPosition()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        var rollResponse = await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        var rolled = await rollResponse.Content.ReadFromJsonAsync<RollResultDto>();
+
+        var currentCard = await _client.GetAsync($"/api/journeys/{journey.Id}/current-card");
+        var current = await currentCard.Content.ReadFromJsonAsync<CurrentCardDto>();
+
+        Assert.Equal(rolled!.BoardPosition, current!.BoardPosition);
+    }
+```
+
+In `backend/tests/Reflekta.Api.Tests/Controllers/JourneyHistoryTests.cs`, add a new test:
+
+```csharp
+    [Fact]
+    public async Task GetById_IncludesEachPlayedCardsCardIdAndBoardPosition()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync("My intention");
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        var rollResponse = await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        var rolled = await rollResponse.Content.ReadFromJsonAsync<RollResultDto>();
+        await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("A reflection."));
+
+        var detailResponse = await _client.GetAsync($"/api/journeys/{journey.Id}");
+        var detail = await detailResponse.Content.ReadFromJsonAsync<JourneyDetailDto>();
+
+        Assert.Equal(rolled!.CardId, detail!.PlayedCards[0].CardId);
+        Assert.Equal(rolled.BoardPosition, detail.PlayedCards[0].BoardPosition);
+    }
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `cd backend && dotnet test --filter "FullyQualifiedName~CurrentCard_IncludesTheCardsBoardPosition|FullyQualifiedName~GetById_IncludesEachPlayedCardsCardIdAndBoardPosition|FullyQualifiedName~Roll_AdvancesFromThePreviousCardsBoardPosition"`
+Expected: build FAILS — `BoardPosition`/`CardId` do not exist on these records yet (CS1061).
+
+- [ ] **Step 3: Add the fields**
+
+In `JourneysController.cs`, update the three record declarations:
+
+```csharp
+public record RollResultDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber, int BoardPosition);
+```
+
+```csharp
+public record CurrentCardDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber, string? ReflectionText, List<ConversationMessageDto> Messages, int BoardPosition);
+```
+
+```csharp
+public record PlayedCardDetailDto(Guid Id, int SequenceNumber, int DiceResult, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, string? ReflectionText, int BoardPosition, Guid CardId);
+```
+
+In the `Roll` action, update the return statement:
+
+```csharp
+        return Ok(new RollResultDto(
+            diceResult, selection.Card.Id, selection.Card.Title, selection.Card.WisdomText,
+            selection.Card.ReflectionPrompt, selection.Card.Themes, playedCard.SequenceNumber,
+            selection.Card.BoardPosition));
+```
+
+In the `GetCurrentCard` action, update the return statement:
+
+```csharp
+        return Ok(new CurrentCardDto(
+            lastPlayed.DiceResult, lastPlayed.Card.Id, lastPlayed.Card.Title, lastPlayed.Card.WisdomText,
+            lastPlayed.Card.ReflectionPrompt, lastPlayed.Card.Themes, lastPlayed.SequenceNumber,
+            reflectionText, messages.Select(ConversationMessageDto.From).ToList(),
+            lastPlayed.Card.BoardPosition));
+```
+
+In the `GetById` action, update the `playedCards` projection:
+
+```csharp
+        var playedCards = journey.PlayedCards
+            .OrderBy(pc => pc.SequenceNumber)
+            .Select(pc => new PlayedCardDetailDto(
+                pc.Id, pc.SequenceNumber, pc.DiceResult, pc.Card!.Title, pc.Card.WisdomText,
+                pc.Card.ReflectionPrompt, pc.Card.Themes,
+                reflectionsByPlayedCardId.GetValueOrDefault(pc.Id), pc.Card.BoardPosition, pc.Card.Id))
+            .ToList();
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `cd backend && dotnet test --filter "FullyQualifiedName~CurrentCard_IncludesTheCardsBoardPosition|FullyQualifiedName~GetById_IncludesEachPlayedCardsCardIdAndBoardPosition|FullyQualifiedName~Roll_AdvancesFromThePreviousCardsBoardPosition"`
+Expected: PASS (3 tests).
+
+Then run the full backend suite to confirm nothing else broke: `cd backend && dotnet test`
+Expected: all tests pass.
+
+- [ ] **Step 5: Sync the frontend DTO types**
+
+In `frontend/src/lib/apiClient.ts`, update the `RollResultDto` and `PlayedCardDetailDto` interfaces:
+
+```ts
+export interface RollResultDto {
+  diceResult: number;
+  cardId: string;
+  cardTitle: string;
+  cardWisdomText: string;
+  cardReflectionPrompt: string;
+  cardThemes: string[];
+  sequenceNumber: number;
+  boardPosition: number;
+}
+```
+
+```ts
+export interface PlayedCardDetailDto {
+  id: string;
+  sequenceNumber: number;
+  diceResult: number;
+  cardTitle: string;
+  cardWisdomText: string;
+  cardReflectionPrompt: string;
+  cardThemes: string[];
+  reflectionText: string | null;
+  boardPosition: number;
+  cardId: string;
+}
+```
+
+(`CurrentCardDto extends RollResultDto` already, so it inherits `boardPosition` with no further edit needed.)
+
+Run: `cd frontend && npm run build`
+Expected: builds successfully (no consumer references the new fields yet, so this only confirms the type files themselves are valid).
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add backend/src/Reflekta.Api/Controllers/JourneysController.cs \
+        backend/tests/Reflekta.Api.Tests/Controllers/JourneysControllerTests.cs \
+        backend/tests/Reflekta.Api.Tests/Controllers/JourneyHistoryTests.cs \
+        frontend/src/lib/apiClient.ts
+git commit -m "feat: expose board position and card id on journey DTOs"
+```
+
+---
+
+### Task 42: Frontend — board layout math, animation steps, and placeholder icon selection
+
+**Files:**
+- Create: `frontend/src/components/board/boardLayout.ts`
+- Create: `frontend/src/components/board/__tests__/boardLayout.test.ts`
+
+**Interfaces:**
+- Consumes: nothing (pure functions, no dependency on Task 41's types).
+- Produces: `BOARD_COLUMNS`, `BOARD_ROWS`, `BOARD_SIZE` (constants), `ICON_KEYS` (readonly string tuple), `IconKey` (type), `cellGridPosition(boardPosition: number): { row: number; column: number }`, `iconForCard(cardId: string): IconKey`, `cardImageSrc(boardPosition: number): string`, `animationSteps(startPosition: number, diceResult: number): number[]` — consumed by Tasks 43, 44, 46, 47.
+
+**Note (added 2026-10-19):** the user has started dropping real card illustrations into `frontend/public/cards/`, named by 1-indexed, zero-padded position (`01.png`, `02.png`, ...; currently 4 of 72 exist). `cardImageSrc` maps a `boardPosition` to that file path. `CardArt` (Task 43) renders the real image when present and falls back to the `BoardIcon` placeholder when it 404s, so the board works today with a partial set and needs no code change as more illustrations are added.
+
+- [ ] **Step 1: Write the failing tests**
+
+```ts
+import { describe, it, expect } from "vitest";
+import {
+  BOARD_COLUMNS,
+  BOARD_ROWS,
+  BOARD_SIZE,
+  ICON_KEYS,
+  cellGridPosition,
+  iconForCard,
+  cardImageSrc,
+  animationSteps,
+} from "../boardLayout";
+
+describe("boardLayout", () => {
+  it("has a board of exactly 72 cells", () => {
+    expect(BOARD_COLUMNS * BOARD_ROWS).toBe(72);
+    expect(BOARD_SIZE).toBe(72);
+  });
+
+  describe("cellGridPosition", () => {
+    it("places position 0 at the bottom-left", () => {
+      expect(cellGridPosition(0)).toEqual({ row: 7, column: 0 });
+    });
+
+    it("places position 8 (end of the first band) at the bottom-right", () => {
+      expect(cellGridPosition(8)).toEqual({ row: 7, column: 8 });
+    });
+
+    it("reverses direction for the second band (position 9)", () => {
+      expect(cellGridPosition(9)).toEqual({ row: 6, column: 8 });
+    });
+
+    it("places position 17 (end of the second band) back at the left", () => {
+      expect(cellGridPosition(17)).toEqual({ row: 6, column: 0 });
+    });
+
+    it("places the last position (71) at the top-left", () => {
+      expect(cellGridPosition(71)).toEqual({ row: 0, column: 0 });
+    });
+  });
+
+  describe("iconForCard", () => {
+    it("returns a key from the fixed icon set", () => {
+      const icon = iconForCard("11111111-1111-1111-1111-111111111111");
+      expect(ICON_KEYS).toContain(icon);
+    });
+
+    it("is stable for the same card id", () => {
+      const id = "9c3f2a10-aaaa-bbbb-cccc-000000000000";
+      expect(iconForCard(id)).toBe(iconForCard(id));
+    });
+
+    it("does not throw and returns a valid key for an uppercase-hex id", () => {
+      const icon = iconForCard("ABCDEF12-3456-7890-ABCD-EF1234567890");
+      expect(ICON_KEYS).toContain(icon);
+    });
+  });
+
+  describe("animationSteps", () => {
+    it("computes a simple non-wrapping sequence", () => {
+      expect(animationSteps(10, 3)).toEqual([11, 12, 13]);
+    });
+
+    it("wraps around the 72-cell boundary", () => {
+      expect(animationSteps(70, 5)).toEqual([71, 0, 1, 2, 3]);
+    });
+
+    it("treats the pre-first-roll start position as 0, matching the backend", () => {
+      expect(animationSteps(0, 1)).toEqual([1]);
+    });
+  });
+
+  describe("cardImageSrc", () => {
+    it("maps board position 0 to the 1-indexed, zero-padded file name", () => {
+      expect(cardImageSrc(0)).toBe("/cards/01.png");
+    });
+
+    it("pads double-digit positions the same way", () => {
+      expect(cardImageSrc(70)).toBe("/cards/71.png");
+    });
+  });
+});
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/boardLayout.test.ts`
+Expected: FAIL — `../boardLayout` does not exist.
+
+- [ ] **Step 3: Implement**
+
+```ts
+export const BOARD_COLUMNS = 9;
+export const BOARD_ROWS = 8;
+export const BOARD_SIZE = BOARD_COLUMNS * BOARD_ROWS;
+
+export interface GridPosition {
+  row: number;
+  column: number;
+}
+
+/** Snake-path placement: band 0 is the bottom row and runs left-to-right, each band above it reverses direction. */
+export function cellGridPosition(boardPosition: number): GridPosition {
+  const band = Math.floor(boardPosition / BOARD_COLUMNS);
+  const indexInBand = boardPosition % BOARD_COLUMNS;
+  const column = band % 2 === 0 ? indexInBand : BOARD_COLUMNS - 1 - indexInBand;
+  const row = BOARD_ROWS - 1 - band;
+  return { row, column };
+}
+
+export const ICON_KEYS = [
+  "circle",
+  "leaf",
+  "spiral",
+  "wave",
+  "square",
+  "triangle",
+  "dot-cluster",
+  "arc",
+  "cross",
+  "diamond",
+  "line",
+  "grid",
+] as const;
+
+export type IconKey = (typeof ICON_KEYS)[number];
+
+/** Deterministic placeholder icon pick — not semantic (every card's theme is unique), just stable per card id. */
+export function iconForCard(cardId: string): IconKey {
+  const hex = cardId.replace(/-/g, "").slice(0, 8);
+  const index = parseInt(hex, 16) % ICON_KEYS.length;
+  return ICON_KEYS[index];
+}
+
+/** The sequence of board positions a token passes through for a roll, wrapping at BOARD_SIZE, last entry is the landing position. */
+export function animationSteps(startPosition: number, diceResult: number): number[] {
+  const steps: number[] = [];
+  for (let i = 1; i <= diceResult; i++) {
+    steps.push((startPosition + i) % BOARD_SIZE);
+  }
+  return steps;
+}
+
+/** Real card illustrations live in frontend/public/cards/, named by 1-indexed, zero-padded position. */
+export function cardImageSrc(boardPosition: number): string {
+  return `/cards/${String(boardPosition + 1).padStart(2, "0")}.png`;
+}
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/boardLayout.test.ts`
+Expected: PASS (14 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add frontend/src/components/board/boardLayout.ts frontend/src/components/board/__tests__/boardLayout.test.ts
+git commit -m "feat: add board grid math, animation steps, and card image path mapping"
+```
+
+---
+
+### Task 43: Frontend — placeholder icon set and card art component
+
+**Files:**
+- Create: `frontend/src/components/board/BoardIcon.tsx`
+- Create: `frontend/src/components/board/__tests__/BoardIcon.test.tsx`
+- Create: `frontend/src/components/board/CardArt.tsx`
+- Create: `frontend/src/components/board/__tests__/CardArt.test.tsx`
+
+**Interfaces:**
+- Consumes: `IconKey`, `ICON_KEYS`, `cardImageSrc`, `iconForCard` from `./boardLayout` (Task 42).
+- Produces: `BoardIcon({ icon: IconKey })` and `CardArt({ boardPosition: number; cardId: string })` components — consumed by Tasks 44 and 46. `CardArt` is the thing those tasks render: it shows the real illustration from `frontend/public/cards/` when present, and falls back to `BoardIcon` when the image 404s (not every card has an illustration yet).
+
+- [ ] **Step 1: Write the failing test**
+
+```tsx
+import { render } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+import { BoardIcon } from "../BoardIcon";
+import { ICON_KEYS } from "../boardLayout";
+
+describe("BoardIcon", () => {
+  it.each(ICON_KEYS)("renders an svg for icon '%s'", (icon) => {
+    const { container } = render(<BoardIcon icon={icon} />);
+    expect(container.querySelector("svg")).toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/BoardIcon.test.tsx`
+Expected: FAIL — `../BoardIcon` does not exist.
+
+- [ ] **Step 3: Implement**
+
+```tsx
+import type { IconKey } from "./boardLayout";
+
+interface BoardIconProps {
+  icon: IconKey;
+}
+
+export function BoardIcon({ icon }: BoardIconProps) {
+  return (
+    <svg
+      className="board-icon"
+      viewBox="0 0 24 24"
+      width="20"
+      height="20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden="true"
+    >
+      {renderShape(icon)}
+    </svg>
+  );
+}
+
+function renderShape(icon: IconKey) {
+  switch (icon) {
+    case "circle":
+      return <circle cx="12" cy="12" r="7" />;
+    case "leaf":
+      return <path d="M5 19C5 10 10 5 19 5C19 14 14 19 5 19Z" />;
+    case "spiral":
+      return <path d="M12 12c0-2 2-3 3-1s0 5-3 5-5-2-5-5 2-6 6-6 7 3 7 7" />;
+    case "wave":
+      return <path d="M3 14c2-4 4-4 6 0s4 4 6 0 4-4 6 0" />;
+    case "square":
+      return <rect x="6" y="6" width="12" height="12" />;
+    case "triangle":
+      return <path d="M12 5L19 19H5Z" />;
+    case "dot-cluster":
+      return (
+        <>
+          <circle cx="8" cy="9" r="1.5" fill="currentColor" />
+          <circle cx="16" cy="9" r="1.5" fill="currentColor" />
+          <circle cx="12" cy="16" r="1.5" fill="currentColor" />
+        </>
+      );
+    case "arc":
+      return <path d="M5 17A10 10 0 0 1 19 17" />;
+    case "cross":
+      return <path d="M12 5V19M5 12H19" />;
+    case "diamond":
+      return <path d="M12 4L20 12L12 20L4 12Z" />;
+    case "line":
+      return <path d="M5 19L19 5" />;
+    case "grid":
+      return (
+        <>
+          <path d="M9 4V20" />
+          <path d="M15 4V20" />
+          <path d="M4 9H20" />
+          <path d="M4 15H20" />
+        </>
+      );
+  }
+}
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/BoardIcon.test.tsx`
+Expected: PASS (12 tests, one per icon key).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add frontend/src/components/board/BoardIcon.tsx frontend/src/components/board/__tests__/BoardIcon.test.tsx
+git commit -m "feat: add placeholder board icon set"
+```
+
+- [ ] **Step 6: Write the failing tests for `CardArt`**
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+import { CardArt } from "../CardArt";
+
+describe("CardArt", () => {
+  it("renders an img pointing at the card's position file", () => {
+    const { container } = render(<CardArt boardPosition={0} cardId="11111111-1111-1111-1111-111111111111" />);
+
+    const img = container.querySelector("img") as HTMLImageElement;
+    expect(img.src).toContain("/cards/01.png");
+  });
+
+  it("falls back to the placeholder icon when the image fails to load", () => {
+    const { container } = render(<CardArt boardPosition={0} cardId="11111111-1111-1111-1111-111111111111" />);
+
+    fireEvent.error(container.querySelector("img")!);
+
+    expect(container.querySelector("img")).not.toBeInTheDocument();
+    expect(container.querySelector("svg")).toBeInTheDocument();
+  });
+});
+```
+
+**Note (fix applied during implementation, 2026-10-20):** this snippet originally used `screen.getByRole("img")`, but `CardArt`'s `<img alt="">` has an implicit ARIA role of "presentation" (empty `alt` signals a decorative image), not "img" — so `getByRole("img")` never matches. The Task 43 implementer caught this and switched to `querySelector("img")`, confirmed correct and kept.
+
+- [ ] **Step 7: Run the tests to verify they fail**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/CardArt.test.tsx`
+Expected: FAIL — `../CardArt` does not exist.
+
+- [ ] **Step 8: Implement `CardArt`**
+
+```tsx
+import { useState } from "react";
+import { BoardIcon } from "./BoardIcon";
+import { cardImageSrc, iconForCard } from "./boardLayout";
+
+interface CardArtProps {
+  boardPosition: number;
+  cardId: string;
+}
+
+export function CardArt({ boardPosition, cardId }: CardArtProps) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  if (imageFailed) {
+    return <BoardIcon icon={iconForCard(cardId)} />;
+  }
+
+  return (
+    <img
+      className="card-art"
+      src={cardImageSrc(boardPosition)}
+      alt=""
+      onError={() => setImageFailed(true)}
+    />
+  );
+}
+```
+
+- [ ] **Step 9: Run the tests to verify they pass**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/CardArt.test.tsx`
+Expected: PASS (2 tests).
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add frontend/src/components/board/CardArt.tsx frontend/src/components/board/__tests__/CardArt.test.tsx
+git commit -m "feat: add CardArt with placeholder-icon fallback for missing illustrations"
+```
+
+---
+
+### Task 44: Frontend — `BoardGrid` (eye-cell grid)
+
+**Files:**
+- Create: `frontend/src/components/board/BoardGrid.tsx`
+- Create: `frontend/src/components/board/BoardGrid.css`
+- Create: `frontend/src/components/board/__tests__/BoardGrid.test.tsx`
+
+**Interfaces:**
+- Consumes: `BOARD_SIZE`, `cellGridPosition` from `./boardLayout` (Task 42); `CardArt` from `./CardArt` (Task 43).
+- Produces: `OpenPosition` (type `{ boardPosition: number; cardId: string }`), `BoardGrid({ openPositions: OpenPosition[]; animatingPosition: number | null })` — consumed by Task 47.
+
+- [ ] **Step 1: Write the failing tests**
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+import { BoardGrid } from "../BoardGrid";
+import { BOARD_SIZE } from "../boardLayout";
+
+describe("BoardGrid", () => {
+  it("renders all 72 cells, closed by default", () => {
+    render(<BoardGrid openPositions={[]} animatingPosition={null} />);
+
+    expect(screen.getAllByRole("gridcell")).toHaveLength(BOARD_SIZE);
+    expect(screen.getByTestId("board-cell-0").className).toContain("board-cell--closed");
+  });
+
+  it("renders an open cell with its card art for a visited position", () => {
+    render(
+      <BoardGrid
+        openPositions={[{ boardPosition: 5, cardId: "11111111-1111-1111-1111-111111111111" }]}
+        animatingPosition={null}
+      />,
+    );
+
+    const cell = screen.getByTestId("board-cell-5");
+    expect(cell.className).toContain("board-cell--open");
+    expect(cell.querySelector("img")).toBeInTheDocument();
+  });
+
+  it("renders a transient flash for an animating position that is not yet open", () => {
+    render(<BoardGrid openPositions={[]} animatingPosition={10} />);
+
+    const cell = screen.getByTestId("board-cell-10");
+    expect(cell.className).toContain("board-cell--flash");
+    expect(cell.querySelector("img")).not.toBeInTheDocument();
+  });
+
+  it("renders the opening transition for the landing cell, which is both open and animating", () => {
+    render(
+      <BoardGrid
+        openPositions={[{ boardPosition: 20, cardId: "22222222-2222-2222-2222-222222222222" }]}
+        animatingPosition={20}
+      />,
+    );
+
+    const cell = screen.getByTestId("board-cell-20");
+    expect(cell.className).toContain("board-cell--opening");
+    expect(cell.querySelector("img")).toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/BoardGrid.test.tsx`
+Expected: FAIL — `../BoardGrid` does not exist.
+
+- [ ] **Step 3: Implement**
+
+```tsx
+import "./BoardGrid.css";
+import { BOARD_SIZE, cellGridPosition } from "./boardLayout";
+import { CardArt } from "./CardArt";
+
+export interface OpenPosition {
+  boardPosition: number;
+  cardId: string;
+}
+
+interface BoardGridProps {
+  openPositions: OpenPosition[];
+  animatingPosition: number | null;
+}
+
+type CellState = "closed" | "flash" | "open" | "opening";
+
+function cellState(boardPosition: number, open: OpenPosition | undefined, animatingPosition: number | null): CellState {
+  const isAnimatingHere = animatingPosition === boardPosition;
+  if (open && isAnimatingHere) return "opening";
+  if (open) return "open";
+  if (isAnimatingHere) return "flash";
+  return "closed";
+}
+
+export function BoardGrid({ openPositions, animatingPosition }: BoardGridProps) {
+  const openByPosition = new Map(openPositions.map((p) => [p.boardPosition, p]));
+
+  return (
+    <div className="board-grid" role="grid" aria-label="Journey board">
+      {Array.from({ length: BOARD_SIZE }, (_, boardPosition) => {
+        const { row, column } = cellGridPosition(boardPosition);
+        const open = openByPosition.get(boardPosition);
+        const state = cellState(boardPosition, open, animatingPosition);
+
+        return (
+          <div
+            key={boardPosition}
+            role="gridcell"
+            className={`board-cell board-cell--${state}`}
+            style={{ gridRow: row + 1, gridColumn: column + 1 }}
+            data-testid={`board-cell-${boardPosition}`}
+          >
+            {open && <CardArt boardPosition={boardPosition} cardId={open.cardId} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+```
+
+```css
+.board-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+
+.board-cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.board-cell--closed::before,
+.board-cell--flash::before {
+  content: "";
+  display: block;
+  width: 70%;
+  height: 2px;
+  background: var(--color-muted);
+  border-radius: 2px;
+  box-shadow:
+    0 -4px 0 -1px var(--color-muted),
+    0 4px 0 -1px var(--color-muted);
+}
+
+.board-cell--flash::before {
+  animation: board-cell-flash 150ms ease-in-out;
+}
+
+@keyframes board-cell-flash {
+  50% {
+    background: var(--color-ink);
+    box-shadow:
+      0 -4px 0 -1px var(--color-ink),
+      0 4px 0 -1px var(--color-ink);
+  }
+}
+
+.board-cell--open,
+.board-cell--opening {
+  width: 100%;
+  height: 72%;
+  border-radius: 50%;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-ink);
+  overflow: hidden;
+}
+
+.board-cell--open .card-art,
+.board-cell--opening .card-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.board-cell--opening {
+  animation: board-cell-open 400ms ease-out;
+}
+
+@keyframes board-cell-open {
+  from {
+    transform: scaleY(0.1);
+    opacity: 0.4;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/BoardGrid.test.tsx`
+Expected: PASS (4 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add frontend/src/components/board/BoardGrid.tsx frontend/src/components/board/BoardGrid.css frontend/src/components/board/__tests__/BoardGrid.test.tsx
+git commit -m "feat: add BoardGrid eye-cell component"
+```
+
+---
+
+### Task 45: Frontend — `DicePanel` (presentational dice button)
+
+**Files:**
+- Create: `frontend/src/components/board/DicePanel.tsx`
+- Create: `frontend/src/components/board/__tests__/DicePanel.test.tsx`
+
+**Interfaces:**
+- Consumes: nothing.
+- Produces: `DicePanel({ onRoll: () => void; isRolling: boolean; disabled: boolean })` — consumed by Task 47.
+
+- [ ] **Step 1: Write the failing tests**
+
+```tsx
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { DicePanel } from "../DicePanel";
+
+describe("DicePanel", () => {
+  it("calls onRoll when clicked", () => {
+    const onRoll = vi.fn();
+    render(<DicePanel onRoll={onRoll} isRolling={false} disabled={false} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /roll the dice/i }));
+
+    expect(onRoll).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the button while rolling", () => {
+    const onRoll = vi.fn();
+    render(<DicePanel onRoll={onRoll} isRolling={true} disabled={false} />);
+
+    const button = screen.getByRole("button", { name: /roll the dice/i });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(onRoll).not.toHaveBeenCalled();
+  });
+
+  it("disables the button when disabled is true even if not rolling", () => {
+    const onRoll = vi.fn();
+    render(<DicePanel onRoll={onRoll} isRolling={false} disabled={true} />);
+
+    expect(screen.getByRole("button", { name: /roll the dice/i })).toBeDisabled();
+  });
+});
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/DicePanel.test.tsx`
+Expected: FAIL — `../DicePanel` does not exist.
+
+- [ ] **Step 3: Implement**
+
+```tsx
+interface DicePanelProps {
+  onRoll: () => void;
+  isRolling: boolean;
+  disabled: boolean;
+}
+
+export function DicePanel({ onRoll, isRolling, disabled }: DicePanelProps) {
+  return (
+    <div className="dice-panel">
+      <button
+        type="button"
+        className={`dice-button${isRolling ? " dice-button--rolling" : ""}`}
+        onClick={onRoll}
+        disabled={isRolling || disabled}
+        aria-label="Roll the dice"
+      >
+        🎲
+      </button>
+      <span className="dice-panel__hint">{isRolling ? "Rolling…" : "Roll the dice"}</span>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/DicePanel.test.tsx`
+Expected: PASS (3 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add frontend/src/components/board/DicePanel.tsx frontend/src/components/board/__tests__/DicePanel.test.tsx
+git commit -m "feat: add presentational DicePanel component"
+```
+
+---
+
+### Task 46: Frontend — `VisitedGallery`
+
+**Files:**
+- Create: `frontend/src/components/board/VisitedGallery.tsx`
+- Create: `frontend/src/components/board/__tests__/VisitedGallery.test.tsx`
+
+**Interfaces:**
+- Consumes: `CardArt` from `./CardArt` (Task 43).
+- Produces: `VisitedCard` (type `{ cardId: string; cardTitle: string; boardPosition: number }`), `VisitedGallery({ visitedCards: VisitedCard[]; totalBoardSize: number })` — consumed by Task 47.
+
+- [ ] **Step 1: Write the failing tests**
+
+```tsx
+import { render, screen } from "@testing-library/react";
+import { describe, it, expect } from "vitest";
+import { VisitedGallery } from "../VisitedGallery";
+
+describe("VisitedGallery", () => {
+  it("shows the opened-count out of the total board size", () => {
+    render(
+      <VisitedGallery
+        visitedCards={[
+          { cardId: "11111111-1111-1111-1111-111111111111", cardTitle: "Control", boardPosition: 4 },
+          { cardId: "22222222-2222-2222-2222-222222222222", cardTitle: "Fear", boardPosition: 20 },
+        ]}
+        totalBoardSize={72}
+      />,
+    );
+
+    expect(screen.getByText("Atvertos kortelės (2/72)")).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("shows 0/72 and no items for a brand-new journey", () => {
+    render(<VisitedGallery visitedCards={[]} totalBoardSize={72} />);
+
+    expect(screen.getByText("Atvertos kortelės (0/72)")).toBeInTheDocument();
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+  });
+});
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/VisitedGallery.test.tsx`
+Expected: FAIL — `../VisitedGallery` does not exist.
+
+- [ ] **Step 3: Implement**
+
+```tsx
+import { CardArt } from "./CardArt";
+
+export interface VisitedCard {
+  cardId: string;
+  cardTitle: string;
+  boardPosition: number;
+}
+
+interface VisitedGalleryProps {
+  visitedCards: VisitedCard[];
+  totalBoardSize: number;
+}
+
+export function VisitedGallery({ visitedCards, totalBoardSize }: VisitedGalleryProps) {
+  return (
+    <section className="visited-gallery" aria-label="Mano kelionė">
+      <div className="visited-gallery__header">
+        <h3>Mano kelionė</h3>
+        <span className="muted">
+          Atvertos kortelės ({visitedCards.length}/{totalBoardSize})
+        </span>
+      </div>
+      <ul className="visited-gallery__list">
+        {visitedCards.map((card) => (
+          <li key={card.cardId} className="visited-gallery__item" title={card.cardTitle}>
+            <CardArt boardPosition={card.boardPosition} cardId={card.cardId} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `cd frontend && npx vitest run src/components/board/__tests__/VisitedGallery.test.tsx`
+Expected: PASS (2 tests).
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add frontend/src/components/board/VisitedGallery.tsx frontend/src/components/board/__tests__/VisitedGallery.test.tsx
+git commit -m "feat: add VisitedGallery component"
+```
+
+---
+
+### Task 47: Frontend — restructure `JourneyPage` into the board layout
+
+**Files:**
+- Modify: `frontend/src/pages/JourneyPage.tsx`
+- Create: `frontend/src/pages/JourneyPage.css`
+- Modify: `frontend/src/pages/__tests__/JourneyPage.test.tsx`
+
+**Interfaces:**
+- Consumes: `BoardGrid`/`OpenPosition` (Task 44), `DicePanel` (Task 45), `VisitedGallery`/`VisitedCard` (Task 46), `BOARD_SIZE`/`animationSteps` (Task 42), `apiClient.getJourneyDetail`/`rollDice`/`getCurrentCard`/`submitReflection`/`completeJourney` (existing), `ReflectionConversation` (existing, unmodified).
+- Produces: the restructured `JourneyPage` component (same props as before: `apiClient`, `journeyId`, `onJourneyCompleted`) — no change to its external props, so `App.tsx`'s usage is unaffected.
+
+- [ ] **Step 1: Write the failing/updated tests**
+
+Replace the full contents of `frontend/src/pages/__tests__/JourneyPage.test.tsx`:
+
+```tsx
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
+import { JourneyPage } from "../JourneyPage";
+import { ApiError } from "../../lib/apiClient";
+import type { ApiClient, ConversationMessageDto, JourneyDetailDto } from "../../lib/apiClient";
+
+const rolledCard = {
+  diceResult: 4,
+  cardId: "card-1",
+  cardTitle: "Control",
+  cardWisdomText: "Notice where you try to hold on tightly.",
+  cardReflectionPrompt: "What are you trying hardest to control today?",
+  cardThemes: ["Control"],
+  sequenceNumber: 1,
+  boardPosition: 4,
+};
+
+const emptyJourneyDetail: JourneyDetailDto = {
+  id: "journey-1",
+  intentionText: "Should I change my career?",
+  status: "Active",
+  startedAt: "",
+  completedAt: null,
+  playedCards: [],
+  summary: null,
+};
+
+const openingMessage: ConversationMessageDto = { id: "m1", role: "assistant", content: "What stands out to you?", createdAt: "" };
+
+function createApiClientMock(): ApiClient {
+  return {
+    createIntention: vi.fn(),
+    createJourney: vi.fn(),
+    rollDice: vi.fn().mockResolvedValue(rolledCard),
+    getCurrentCard: vi.fn().mockRejectedValue(new ApiError(404, "/current-card")),
+    getJourneyDetail: vi.fn().mockResolvedValue(emptyJourneyDetail),
+    submitReflection: vi.fn().mockResolvedValue({
+      id: "reflection-1",
+      playedCardId: "card-1",
+      text: "I noticed I grip tightly onto plans.",
+      createdAt: "",
+      messages: [openingMessage],
+      aiUnavailable: false,
+    }),
+    sendMessage: vi.fn(),
+    requestReply: vi.fn(),
+    completeJourney: vi.fn().mockResolvedValue({
+      id: "journey-1",
+      intentionId: "intention-1",
+      status: "Completed",
+      startedAt: "",
+      completedAt: "2026-01-01T00:00:00Z",
+    }),
+  } as unknown as ApiClient;
+}
+
+async function rollAndReflect(text: string) {
+  fireEvent.click(await screen.findByRole("button", { name: /roll the dice/i }));
+  await waitFor(() => screen.getByLabelText(/your reflection/i), { timeout: 3000 });
+  fireEvent.change(screen.getByLabelText(/your reflection/i), { target: { value: text } });
+  fireEvent.click(screen.getByRole("button", { name: /save reflection/i }));
+}
+
+describe("JourneyPage", () => {
+  it("shows the journey's intention", async () => {
+    const apiClient = createApiClientMock();
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Should I change my career?")).toBeInTheDocument());
+  });
+
+  it("rolls the dice and displays the resulting card", async () => {
+    const apiClient = createApiClientMock();
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /roll the dice/i }));
+
+    await waitFor(() => expect(screen.getByText("Control")).toBeInTheDocument(), { timeout: 3000 });
+    expect(screen.getByText(/notice where you try to hold on tightly/i)).toBeInTheDocument();
+    expect(screen.getByText(/what are you trying hardest to control today/i)).toBeInTheDocument();
+    expect(apiClient.rollDice).toHaveBeenCalledWith("journey-1");
+  });
+
+  it("ignores a second click while a roll is already animating", async () => {
+    const apiClient = createApiClientMock();
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    const button = await screen.findByRole("button", { name: /roll the dice/i });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getByText("Control")).toBeInTheDocument(), { timeout: 3000 });
+    expect(apiClient.rollDice).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a reflection form after the card is revealed, and hides it once submitted", async () => {
+    const apiClient = createApiClientMock();
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    await rollAndReflect("I noticed I grip tightly onto plans.");
+
+    await waitFor(() =>
+      expect(apiClient.submitReflection).toHaveBeenCalledWith("journey-1", "I noticed I grip tightly onto plans."),
+    );
+    await waitFor(() => expect(screen.queryByLabelText(/your reflection/i)).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /complete journey/i })).toBeInTheDocument();
+  });
+
+  it("shows the AI's first question after the reflection is saved", async () => {
+    const apiClient = createApiClientMock();
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    await rollAndReflect("I noticed I grip tightly onto plans.");
+
+    await waitFor(() => expect(screen.getByText("What stands out to you?")).toBeInTheDocument());
+    expect(screen.getByLabelText(/your reply/i)).toBeInTheDocument();
+  });
+
+  it("calls onJourneyCompleted after completing the journey", async () => {
+    const apiClient = createApiClientMock();
+    const onJourneyCompleted = vi.fn();
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={onJourneyCompleted} />);
+
+    await rollAndReflect("Enough for today.");
+    await waitFor(() => screen.getByRole("button", { name: /complete journey/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /complete journey/i }));
+
+    await waitFor(() => expect(apiClient.completeJourney).toHaveBeenCalledWith("journey-1"));
+    await waitFor(() => expect(onJourneyCompleted).toHaveBeenCalled());
+  });
+
+  it("restores the card, reflection and conversation after a reload", async () => {
+    const apiClient = createApiClientMock();
+    vi.mocked(apiClient.getCurrentCard).mockResolvedValue({
+      ...rolledCard,
+      reflectionText: "I noticed I grip tightly onto plans.",
+      messages: [openingMessage],
+    });
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Control")).toBeInTheDocument());
+    expect(screen.getByText("I noticed I grip tightly onto plans.")).toBeInTheDocument();
+    expect(screen.getByText("What stands out to you?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /complete journey/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /roll the dice/i })).not.toBeDisabled();
+  });
+
+  it("restores a card without a reflection to the reflection form", async () => {
+    const apiClient = createApiClientMock();
+    vi.mocked(apiClient.getCurrentCard).mockResolvedValue({ ...rolledCard, reflectionText: null, messages: [] });
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByLabelText(/your reflection/i)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /roll the dice/i })).toBeDisabled();
+  });
+
+  it("offers retry after a reload when the last message is unanswered", async () => {
+    const apiClient = createApiClientMock();
+    vi.mocked(apiClient.getCurrentCard).mockResolvedValue({
+      ...rolledCard,
+      reflectionText: "I noticed I grip tightly onto plans.",
+      messages: [openingMessage, { id: "m2", role: "user", content: "Since school.", createdAt: "" }],
+    });
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument());
+    expect(screen.queryByLabelText(/your reply/i)).not.toBeInTheDocument();
+  });
+
+  it("shows already-opened cells on the board after a reload", async () => {
+    const apiClient = createApiClientMock();
+    vi.mocked(apiClient.getJourneyDetail).mockResolvedValue({
+      ...emptyJourneyDetail,
+      playedCards: [
+        {
+          id: "played-1",
+          sequenceNumber: 1,
+          diceResult: 4,
+          cardTitle: "Control",
+          cardWisdomText: "Notice where you try to hold on tightly.",
+          cardReflectionPrompt: "What are you trying hardest to control today?",
+          cardThemes: ["Control"],
+          reflectionText: "I noticed I grip tightly onto plans.",
+          boardPosition: 4,
+          cardId: "card-1",
+        },
+      ],
+    });
+    vi.mocked(apiClient.getCurrentCard).mockResolvedValue({
+      ...rolledCard,
+      reflectionText: "I noticed I grip tightly onto plans.",
+      messages: [openingMessage],
+    });
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Atvertos kortelės (1/72)")).toBeInTheDocument());
+    expect(screen.getByTestId("board-cell-4").className).toContain("board-cell--open");
+  });
+
+  it("still renders the board and current card when getJourneyDetail fails", async () => {
+    const apiClient = createApiClientMock();
+    vi.mocked(apiClient.getJourneyDetail).mockRejectedValue(new Error("network error"));
+    vi.mocked(apiClient.getCurrentCard).mockResolvedValue({
+      ...rolledCard,
+      reflectionText: "I noticed I grip tightly onto plans.",
+      messages: [openingMessage],
+    });
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Control")).toBeInTheDocument());
+    expect(screen.getByText("Atvertos kortelės (0/72)")).toBeInTheDocument();
+    expect(screen.getAllByRole("gridcell")).toHaveLength(72);
+  });
+});
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `cd frontend && npx vitest run src/pages/__tests__/JourneyPage.test.tsx`
+Expected: FAIL — `JourneyPage` does not yet fetch `getJourneyDetail`, render a board, or use `aria-label="Roll the dice"`.
+
+- [ ] **Step 3: Implement**
+
+Replace the full contents of `frontend/src/pages/JourneyPage.tsx`:
+
+```tsx
+import { useEffect, useState } from "react";
+import "./JourneyPage.css";
+import { ApiError } from "../lib/apiClient";
+import type { ApiClient, ConversationMessageDto, RollResultDto } from "../lib/apiClient";
+import { ReflectionConversation } from "../components/ReflectionConversation";
+import { BoardGrid } from "../components/board/BoardGrid";
+import type { OpenPosition } from "../components/board/BoardGrid";
+import { DicePanel } from "../components/board/DicePanel";
+import { VisitedGallery } from "../components/board/VisitedGallery";
+import type { VisitedCard } from "../components/board/VisitedGallery";
+import { BOARD_SIZE, animationSteps } from "../components/board/boardLayout";
+
+interface JourneyPageProps {
+  apiClient: ApiClient;
+  journeyId: string;
+  onJourneyCompleted: () => void;
+}
+
+interface Conversation {
+  messages: ConversationMessageDto[];
+  aiUnavailable: boolean;
+}
+
+/** True when the reflection or the latest user message still waits for an AI reply. */
+function isAwaitingAiReply(messages: ConversationMessageDto[]): boolean {
+  return messages.length === 0 || messages[messages.length - 1].role === "user";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: JourneyPageProps) {
+  const [isLoading, setIsLoading] = useState(true);
+  const [intentionText, setIntentionText] = useState("");
+  const [openPositions, setOpenPositions] = useState<OpenPosition[]>([]);
+  const [visitedCards, setVisitedCards] = useState<VisitedCard[]>([]);
+  const [animatingPosition, setAnimatingPosition] = useState<number | null>(null);
+  const [card, setCard] = useState<RollResultDto | null>(null);
+  const [reflectionText, setReflectionText] = useState("");
+  const [submittedReflection, setSubmittedReflection] = useState<string | null>(null);
+  const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [isRolling, setIsRolling] = useState(false);
+  const [isSubmittingReflection, setIsSubmittingReflection] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function load() {
+      try {
+        const detail = await apiClient.getJourneyDetail(journeyId);
+        if (ignore) return;
+        setIntentionText(detail.intentionText);
+        setOpenPositions(detail.playedCards.map((pc) => ({ boardPosition: pc.boardPosition, cardId: pc.cardId })));
+        setVisitedCards(
+          detail.playedCards.map((pc) => ({ cardId: pc.cardId, cardTitle: pc.cardTitle, boardPosition: pc.boardPosition })),
+        );
+      } catch {
+        // The board still renders fully closed; the current-card fetch below still lets play continue.
+      }
+
+      try {
+        const current = await apiClient.getCurrentCard(journeyId);
+        if (ignore) return;
+        setCard(current);
+        setSubmittedReflection(current.reflectionText);
+        if (current.reflectionText !== null) {
+          setConversation({ messages: current.messages, aiUnavailable: isAwaitingAiReply(current.messages) });
+        }
+      } catch (caught) {
+        if (!(caught instanceof ApiError && caught.status === 404)) {
+          setError("Something went wrong. Please try again.");
+        }
+      }
+    }
+
+    load().finally(() => {
+      if (!ignore) setIsLoading(false);
+    });
+    return () => {
+      ignore = true;
+    };
+  }, [apiClient, journeyId]);
+
+  async function handleRoll() {
+    if (isRolling) return;
+    setError(null);
+    setIsRolling(true);
+    try {
+      const startPosition = card?.boardPosition ?? 0;
+      const result = await apiClient.rollDice(journeyId);
+      const steps = animationSteps(startPosition, result.diceResult);
+
+      for (const step of steps.slice(0, -1)) {
+        setAnimatingPosition(step);
+        await sleep(150);
+      }
+
+      const landingPosition = steps[steps.length - 1];
+      setOpenPositions((current) => [...current, { boardPosition: result.boardPosition, cardId: result.cardId }]);
+      setVisitedCards((current) => [
+        ...current,
+        { cardId: result.cardId, cardTitle: result.cardTitle, boardPosition: result.boardPosition },
+      ]);
+      setAnimatingPosition(landingPosition);
+      await sleep(400);
+      setAnimatingPosition(null);
+
+      setCard(result);
+      setReflectionText("");
+      setSubmittedReflection(null);
+      setConversation(null);
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setIsRolling(false);
+    }
+  }
+
+  async function handleSubmitReflection(event: React.SubmitEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setIsSubmittingReflection(true);
+    try {
+      const result = await apiClient.submitReflection(journeyId, reflectionText);
+      setSubmittedReflection(result.text);
+      setConversation({ messages: result.messages, aiUnavailable: result.aiUnavailable });
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setIsSubmittingReflection(false);
+    }
+  }
+
+  async function handleComplete() {
+    setError(null);
+    setIsCompleting(true);
+    try {
+      await apiClient.completeJourney(journeyId);
+      onJourneyCompleted();
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setIsCompleting(false);
+    }
+  }
+
+  if (isLoading) {
+    return <p>Loading…</p>;
+  }
+
+  return (
+    <div className="board-page">
+      <header className="board-page__intention">
+        <p>{intentionText}</p>
+      </header>
+
+      <div className="board-page__layout">
+        <BoardGrid openPositions={openPositions} animatingPosition={animatingPosition} />
+
+        <aside className="board-page__sidebar">
+          <DicePanel
+            onRoll={handleRoll}
+            isRolling={isRolling}
+            disabled={card !== null && submittedReflection === null}
+          />
+
+          <VisitedGallery visitedCards={visitedCards} totalBoardSize={BOARD_SIZE} />
+
+          <section className="board-page__reflection">
+            {card && (
+              <article className="card">
+                <h2>{card.cardTitle}</h2>
+                <p>{card.cardWisdomText}</p>
+                <p className="prompt">{card.cardReflectionPrompt}</p>
+              </article>
+            )}
+
+            {card && submittedReflection === null && (
+              <form className="stack" onSubmit={handleSubmitReflection}>
+                <div className="field">
+                  <label htmlFor="reflection-text">Your reflection</label>
+                  <textarea
+                    id="reflection-text"
+                    value={reflectionText}
+                    onChange={(event) => setReflectionText(event.target.value)}
+                    placeholder="What came up for you?"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="btn"
+                  disabled={isSubmittingReflection || reflectionText.trim().length === 0}
+                >
+                  Save reflection
+                </button>
+              </form>
+            )}
+
+            {card && submittedReflection !== null && (
+              <div className="stack">
+                <p>{submittedReflection}</p>
+                {conversation && (
+                  <ReflectionConversation
+                    key={card.sequenceNumber}
+                    apiClient={apiClient}
+                    journeyId={journeyId}
+                    initialMessages={conversation.messages}
+                    initialAiUnavailable={conversation.aiUnavailable}
+                  />
+                )}
+                <button onClick={handleComplete} disabled={isCompleting} className="btn btn-ghost">
+                  Complete journey
+                </button>
+              </div>
+            )}
+
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}
+```
+
+Create `frontend/src/pages/JourneyPage.css`:
+
+```css
+.board-page {
+  width: 100%;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  text-align: left;
+}
+
+.board-page__intention {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  color: var(--color-muted);
+}
+
+.board-page__layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+.board-page__sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.dice-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.dice-button {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  border: 0;
+  background: var(--color-ink);
+  color: var(--color-bg);
+  font-size: 28px;
+  cursor: pointer;
+}
+
+.dice-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dice-button--rolling {
+  animation: dice-shake 150ms ease-in-out infinite;
+}
+
+@keyframes dice-shake {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(8deg);
+  }
+}
+
+.dice-panel__hint {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.visited-gallery__header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.visited-gallery__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.visited-gallery__item {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.visited-gallery__item .card-art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (min-width: 768px) {
+  .board-page__layout {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    align-items: start;
+  }
+}
+```
+
+- [ ] **Step 4: Run the tests to verify they pass**
+
+Run: `cd frontend && npx vitest run src/pages/__tests__/JourneyPage.test.tsx`
+Expected: PASS (11 tests). Note the real ~150ms/400ms animation delays mean this file takes a few seconds longer than before — that is expected, not a flake.
+
+Then run the full frontend suite: `cd frontend && npm test`
+Expected: all tests pass. If `JourneyDetailPage.test.tsx` or `HistoryPage.test.tsx` fail, they are unrelated to this task (they don't render `JourneyPage`) — investigate separately rather than editing them here.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add frontend/src/pages/JourneyPage.tsx frontend/src/pages/JourneyPage.css frontend/src/pages/__tests__/JourneyPage.test.tsx
+git commit -m "feat: restructure JourneyPage into the interactive board layout"
+```
+
+---
+
+### Task 48: Documentation and end-to-end verification
+
+**Files:**
+- Modify: `docs/ARCHITECTURE.md` (only if the manual check below finds something to correct)
+- Modify: `docs/plan.md` (Self-Review Notes for this phase)
+
+- [ ] **Step 1: Run the full test suites**
+
+```bash
+cd backend && dotnet test
+cd ../frontend && npm test && npm run lint && npm run build
+```
+
+Expected: all green.
+
+- [ ] **Step 2: Manual end-to-end check**
+
+```bash
+docker compose up -d --build
+```
+
+In a browser, sign in, set an intention, and on the journey page confirm:
+- The intention text appears in the header.
+- All 72 cells render closed (no numbers, no icons) on a brand-new journey.
+- Clicking the dice button animates the token step-by-step and the landing cell opens with a placeholder icon.
+- The card's title/wisdom/prompt and the reflection form appear only after the animation finishes.
+- After saving a reflection, "Mano kelionė" shows "1/72" with one icon, and the AI conversation panel appears in the sidebar.
+- Reloading the page restores the board (opened cells), the current card, and the conversation exactly as before.
+- Clicking "Complete journey" after reflecting still completes the journey and navigates to its history detail page.
+
+```bash
+docker compose down
+```
+
+- [ ] **Step 3: Check whether `docs/ARCHITECTURE.md` needs an update**
+
+Read `docs/ARCHITECTURE.md`'s frontend/UI section. This phase only changes how `JourneyPage` renders already-existing data (plus two additive DTO fields) — it does not change the three-tier boundary, authentication, or AI architecture described there. If the document already describes the frontend only in general terms (no specific claim this phase contradicts), no edit is needed; if it names the old single-card-text flow specifically, update that sentence to describe the board instead.
+
+- [ ] **Step 4: Append Self-Review Notes to `docs/plan.md`**
+
+Append after this phase's last task in `docs/plan.md`:
+
+```markdown
+## Self-Review Notes — Phase 4
+
+- **Spec coverage:** every section of `docs/superpowers/specs/2026-10-15-interactive-board-design.md` maps to a task — backend DTO fields → Task 41; board math/animation/icons → Task 42; icon and card-art rendering → Task 43; eye-cell grid → Task 44; dice button → Task 45; gallery → Task 46; page composition and CSS → Task 47.
+- **Deviations from the spec:** see "Deviations from the spec" at the top of this phase's plan — dropped the redundant `CurrentCardDto.IntentionText`, added `PlayedCardDetailDto.CardId` (needed for stable cross-journey icon identity, which the spec implied but didn't wire a field for), moved animation ownership from `DicePanel` to `JourneyPage` (required by the spec's own Error Handling section), and added `CardArt`/`cardImageSrc` so real card illustrations in `frontend/public/cards/` render when present, falling back to the placeholder icon set otherwise.
+- **Placeholder scan:** no TBD/TODO; every step has runnable code.
+- **Out of scope, confirmed with the user:** a proactive AI greeting per position (existing reactive flow kept), the decorative top search input (replaced with the intention text per the user's explicit request).
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add docs/plan.md
+# only add docs/ARCHITECTURE.md if Step 3 changed it
+git commit -m "docs: phase 4 self-review notes for the interactive journey board"
+```
+
+---
+
+**Phase 4 plan complete.**
+
+## Self-Review Notes — Phase 4
+
+- **Spec coverage:** every section of `docs/superpowers/specs/2026-10-15-interactive-board-design.md` maps to a task — backend DTO fields → Task 41; board math/animation/icons → Task 42; icon and card-art rendering → Task 43; eye-cell grid → Task 44; dice button → Task 45; gallery → Task 46; page composition and CSS → Task 47.
+- **Deviations from the spec:** see "Deviations from the spec" at the top of this phase's plan — dropped the redundant `CurrentCardDto.IntentionText`, added `PlayedCardDetailDto.CardId` (needed for stable cross-journey icon identity, which the spec implied but didn't wire a field for), moved animation ownership from `DicePanel` to `JourneyPage` (required by the spec's own Error Handling section), and added `CardArt`/`cardImageSrc` so real card illustrations in `frontend/public/cards/` render when present, falling back to the placeholder icon set otherwise.
+- **Placeholder scan:** no TBD/TODO; every step has runnable code.
+- **Out of scope, confirmed with the user:** a proactive AI greeting per position (existing reactive flow kept), the decorative top search input (replaced with the intention text per the user's explicit request).
