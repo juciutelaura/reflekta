@@ -12,6 +12,7 @@ const rolledCard = {
   cardReflectionPrompt: "What are you trying hardest to control today?",
   cardThemes: ["Control"],
   sequenceNumber: 1,
+  boardPosition: 1,
 };
 
 const openingMessage: ConversationMessageDto = { id: "m1", role: "assistant", content: "What stands out to you?", createdAt: "" };

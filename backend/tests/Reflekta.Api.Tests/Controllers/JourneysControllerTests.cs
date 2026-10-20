@@ -95,6 +95,24 @@ public class JourneysControllerTests : IAsyncLifetime
 
         Assert.Equal(1, firstPosition);
         Assert.Equal(2, secondPosition);
+        Assert.Equal(1, first!.BoardPosition);
+        Assert.Equal(2, second!.BoardPosition);
+    }
+
+    [Fact]
+    public async Task CurrentCard_IncludesTheCardsBoardPosition()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync();
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        var rollResponse = await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        var rolled = await rollResponse.Content.ReadFromJsonAsync<RollResultDto>();
+
+        var currentCard = await _client.GetAsync($"/api/journeys/{journey.Id}/current-card");
+        var current = await currentCard.Content.ReadFromJsonAsync<CurrentCardDto>();
+
+        Assert.Equal(rolled!.BoardPosition, current!.BoardPosition);
     }
 
     private sealed class FixedDiceService(int value) : IDiceService

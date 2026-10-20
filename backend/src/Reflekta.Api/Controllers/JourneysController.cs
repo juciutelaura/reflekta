@@ -8,7 +8,7 @@ using Reflekta.Api.Services;
 namespace Reflekta.Api.Controllers;
 
 public record CreateJourneyRequest(Guid IntentionId);
-public record RollResultDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber);
+public record RollResultDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber, int BoardPosition);
 public record SubmitReflectionRequest(string Text);
 public record ReflectionDto(Guid Id, Guid PlayedCardId, string Text, DateTimeOffset CreatedAt);
 public record JourneyDto(Guid Id, Guid IntentionId, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt);
@@ -20,13 +20,13 @@ public record ConversationMessageDto(Guid Id, string Role, string Content, DateT
 public record JourneyDetailDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, List<PlayedCardDetailDto> PlayedCards, SessionSummaryDto? Summary);
 
 public record ReflectionWithConversationDto(Guid Id, Guid PlayedCardId, string Text, DateTimeOffset CreatedAt, List<ConversationMessageDto> Messages, bool AiUnavailable);
-public record CurrentCardDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber, string? ReflectionText, List<ConversationMessageDto> Messages);
+public record CurrentCardDto(int DiceResult, Guid CardId, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, int SequenceNumber, string? ReflectionText, List<ConversationMessageDto> Messages, int BoardPosition);
 
 public record SendMessageRequest(string Content);
 public record SendMessageResponse(ConversationMessageDto UserMessage, ConversationMessageDto AssistantMessage);
 public record ReplyResponse(ConversationMessageDto AssistantMessage);
 public record JourneySummaryDto(Guid Id, string IntentionText, string Status, DateTimeOffset StartedAt, DateTimeOffset? CompletedAt, int CardCount);
-public record PlayedCardDetailDto(Guid Id, int SequenceNumber, int DiceResult, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, string? ReflectionText);
+public record PlayedCardDetailDto(Guid Id, int SequenceNumber, int DiceResult, string CardTitle, string CardWisdomText, string CardReflectionPrompt, List<string> CardThemes, string? ReflectionText, int BoardPosition, Guid CardId);
 
 public record SessionSummaryDto(Guid Id, Guid JourneyId, string SummaryText, List<string> Themes, DateTimeOffset CreatedAt)
 {
@@ -141,7 +141,8 @@ public class JourneysController : ControllerBase
 
         return Ok(new RollResultDto(
             diceResult, selection.Card.Id, selection.Card.Title, selection.Card.WisdomText,
-            selection.Card.ReflectionPrompt, selection.Card.Themes, playedCard.SequenceNumber));
+            selection.Card.ReflectionPrompt, selection.Card.Themes, playedCard.SequenceNumber,
+            selection.Card.BoardPosition));
     }
 
     [HttpGet("{journeyId:guid}/current-card")]
@@ -175,7 +176,8 @@ public class JourneysController : ControllerBase
         return Ok(new CurrentCardDto(
             lastPlayed.DiceResult, lastPlayed.Card.Id, lastPlayed.Card.Title, lastPlayed.Card.WisdomText,
             lastPlayed.Card.ReflectionPrompt, lastPlayed.Card.Themes, lastPlayed.SequenceNumber,
-            reflectionText, messages.Select(ConversationMessageDto.From).ToList()));
+            reflectionText, messages.Select(ConversationMessageDto.From).ToList(),
+            lastPlayed.Card.BoardPosition));
 
     }
 
@@ -367,7 +369,7 @@ public class JourneysController : ControllerBase
             .Select(pc => new PlayedCardDetailDto(
                 pc.Id, pc.SequenceNumber, pc.DiceResult, pc.Card!.Title, pc.Card.WisdomText,
                 pc.Card.ReflectionPrompt, pc.Card.Themes,
-                reflectionsByPlayedCardId.GetValueOrDefault(pc.Id)))
+                reflectionsByPlayedCardId.GetValueOrDefault(pc.Id), pc.Card.BoardPosition, pc.Card.Id))
             .ToList();
 
         var summary = await _dbContext.SessionSummaries.FirstOrDefaultAsync(s => s.JourneyId == journeyId, ct);

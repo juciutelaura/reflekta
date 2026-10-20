@@ -23,6 +23,7 @@ export interface RollResultDto {
   cardReflectionPrompt: string;
   cardThemes: string[];
   sequenceNumber: number;
+  boardPosition: number;
 }
 
 export interface ReflectionDto {
@@ -50,6 +51,8 @@ export interface PlayedCardDetailDto {
   cardReflectionPrompt: string;
   cardThemes: string[];
   reflectionText: string | null;
+  boardPosition: number;
+  cardId: string;
 }
 
 export interface JourneyDetailDto {

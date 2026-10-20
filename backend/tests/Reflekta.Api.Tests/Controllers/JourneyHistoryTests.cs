@@ -92,6 +92,24 @@ public class JourneyHistoryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task GetById_IncludesEachPlayedCardsCardIdAndBoardPosition()
+    {
+        AuthenticateAs("user-1");
+        var intentionId = await CreateIntentionAsync("My intention");
+        var createResponse = await _client.PostAsJsonAsync("/api/journeys", new CreateJourneyRequest(intentionId));
+        var journey = await createResponse.Content.ReadFromJsonAsync<JourneyDto>();
+        var rollResponse = await _client.PostAsync($"/api/journeys/{journey!.Id}/roll", null);
+        var rolled = await rollResponse.Content.ReadFromJsonAsync<RollResultDto>();
+        await _client.PostAsJsonAsync($"/api/journeys/{journey.Id}/reflection", new SubmitReflectionRequest("A reflection."));
+
+        var detailResponse = await _client.GetAsync($"/api/journeys/{journey.Id}");
+        var detail = await detailResponse.Content.ReadFromJsonAsync<JourneyDetailDto>();
+
+        Assert.Equal(rolled!.CardId, detail!.PlayedCards[0].CardId);
+        Assert.Equal(rolled.BoardPosition, detail.PlayedCards[0].BoardPosition);
+    }
+
+    [Fact]
     public async Task GetById_ForAnotherUsersJourney_ReturnsForbidden()
     {
         AuthenticateAs("user-1");
