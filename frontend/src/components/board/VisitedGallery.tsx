@@ -22,7 +22,7 @@ export function VisitedGallery({ visitedCards, totalBoardSize }: VisitedGalleryP
       </div>
       <ul className="visited-gallery__list">
         {visitedCards.map((card) => (
-          <li key={card.cardId} className="visited-gallery__item" title={card.cardTitle}>
+          <li key={card.boardPosition} className="visited-gallery__item" title={card.cardTitle}>
             <CardArt boardPosition={card.boardPosition} cardId={card.cardId} />
           </li>
         ))}

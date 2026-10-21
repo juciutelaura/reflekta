@@ -53,9 +53,12 @@ export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: Journe
         const detail = await apiClient.getJourneyDetail(journeyId);
         if (ignore) return;
         setIntentionText(detail.intentionText);
-        setOpenPositions(detail.playedCards.map((pc) => ({ boardPosition: pc.boardPosition, cardId: pc.cardId })));
+        const uniqueByPosition = Array.from(
+          new Map(detail.playedCards.map((pc) => [pc.boardPosition, pc])).values(),
+        );
+        setOpenPositions(uniqueByPosition.map((pc) => ({ boardPosition: pc.boardPosition, cardId: pc.cardId })));
         setVisitedCards(
-          detail.playedCards.map((pc) => ({ cardId: pc.cardId, cardTitle: pc.cardTitle, boardPosition: pc.boardPosition })),
+          uniqueByPosition.map((pc) => ({ cardId: pc.cardId, cardTitle: pc.cardTitle, boardPosition: pc.boardPosition })),
         );
       } catch {
         // The board still renders fully closed; the current-card fetch below still lets play continue.
@@ -70,6 +73,7 @@ export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: Journe
           setConversation({ messages: current.messages, aiUnavailable: isAwaitingAiReply(current.messages) });
         }
       } catch (caught) {
+        if (ignore) return;
         if (!(caught instanceof ApiError && caught.status === 404)) {
           setError("Something went wrong. Please try again.");
         }
@@ -89,8 +93,8 @@ export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: Journe
     setError(null);
     setIsRolling(true);
     try {
-      const startPosition = card?.boardPosition ?? 0;
       const result = await apiClient.rollDice(journeyId);
+      const startPosition = (result.boardPosition - result.diceResult + BOARD_SIZE + BOARD_SIZE) % BOARD_SIZE;
       const steps = animationSteps(startPosition, result.diceResult);
 
       for (const step of steps.slice(0, -1)) {
@@ -99,11 +103,16 @@ export function JourneyPage({ apiClient, journeyId, onJourneyCompleted }: Journe
       }
 
       const landingPosition = steps[steps.length - 1];
-      setOpenPositions((current) => [...current, { boardPosition: result.boardPosition, cardId: result.cardId }]);
-      setVisitedCards((current) => [
-        ...current,
-        { cardId: result.cardId, cardTitle: result.cardTitle, boardPosition: result.boardPosition },
-      ]);
+      setOpenPositions((current) =>
+        current.some((entry) => entry.boardPosition === result.boardPosition)
+          ? current
+          : [...current, { boardPosition: result.boardPosition, cardId: result.cardId }],
+      );
+      setVisitedCards((current) =>
+        current.some((entry) => entry.boardPosition === result.boardPosition)
+          ? current
+          : [...current, { cardId: result.cardId, cardTitle: result.cardTitle, boardPosition: result.boardPosition }],
+      );
       setAnimatingPosition(landingPosition);
       await sleep(400);
       setAnimatingPosition(null);

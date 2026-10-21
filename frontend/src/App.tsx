@@ -25,6 +25,7 @@ function ActiveJourneyRoute({ apiClient }: { apiClient: ApiClient }) {
   if (!journeyId) return <Navigate to="/" replace />;
   return (
     <JourneyPage
+      key={journeyId}
       apiClient={apiClient}
       journeyId={journeyId}
       onJourneyCompleted={() => navigate(`/history/${journeyId}`)}

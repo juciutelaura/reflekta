@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 import { JourneyPage } from "../JourneyPage";
 import { ApiError } from "../../lib/apiClient";
@@ -212,5 +212,70 @@ describe("JourneyPage", () => {
     await waitFor(() => expect(screen.getByText("Control")).toBeInTheDocument());
     expect(screen.getByText("Atvertos kortelės (0/72)")).toBeInTheDocument();
     expect(screen.getAllByRole("gridcell")).toHaveLength(72);
+  });
+
+  it("does not duplicate the gallery entry when a roll revisits an already-open position", async () => {
+    const apiClient = createApiClientMock();
+    vi.mocked(apiClient.getJourneyDetail).mockResolvedValue({
+      ...emptyJourneyDetail,
+      playedCards: [
+        {
+          id: "played-1",
+          sequenceNumber: 1,
+          diceResult: 4,
+          cardTitle: "Control",
+          cardWisdomText: "Notice where you try to hold on tightly.",
+          cardReflectionPrompt: "What are you trying hardest to control today?",
+          cardThemes: ["Control"],
+          reflectionText: "I noticed I grip tightly onto plans.",
+          boardPosition: 4,
+          cardId: "card-1",
+        },
+      ],
+    });
+    vi.mocked(apiClient.getCurrentCard).mockResolvedValue({
+      ...rolledCard,
+      reflectionText: "I noticed I grip tightly onto plans.",
+      messages: [openingMessage],
+    });
+    // The server reports a revisit: same boardPosition/cardId that is already open.
+    vi.mocked(apiClient.rollDice).mockResolvedValue(rolledCard);
+
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Atvertos kortelės (1/72)")).toBeInTheDocument());
+    const gallery = screen.getByLabelText("Mano kelionė");
+    expect(within(gallery).getAllByRole("listitem")).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("button", { name: /roll the dice/i }));
+
+    // Wait for the roll to finish (the reflection form reappears once the new card settles).
+    await waitFor(() => screen.getByLabelText(/your reflection/i), { timeout: 3000 });
+
+    expect(screen.getByText("Atvertos kortelės (1/72)")).toBeInTheDocument();
+    expect(within(gallery).getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("lands the animation on the server-reported position even when the prior card failed to load", async () => {
+    const apiClient = createApiClientMock();
+    vi.mocked(apiClient.getCurrentCard).mockRejectedValue(new Error("network error"));
+    vi.mocked(apiClient.rollDice).mockResolvedValue({
+      ...rolledCard,
+      cardId: "card-9",
+      cardTitle: "New Card",
+      boardPosition: 60,
+      diceResult: 5,
+    });
+
+    render(<JourneyPage apiClient={apiClient} journeyId="journey-1" onJourneyCompleted={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText(/something went wrong/i)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /roll the dice/i }));
+
+    await waitFor(() => expect(screen.getByTestId("board-cell-60").className).toContain("board-cell--open"), {
+      timeout: 3000,
+    });
+    expect(screen.getByTestId("board-cell-0").className).toContain("board-cell--closed");
   });
 });

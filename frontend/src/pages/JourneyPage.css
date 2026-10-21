@@ -43,7 +43,9 @@
   border: 0;
   background: var(--color-ink);
   color: var(--color-bg);
-  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 
