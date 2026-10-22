@@ -110,18 +110,22 @@ public class JourneysController : ControllerBase
             return BadRequest("Journey is not active.");
 
         var lastPlayed = journey.PlayedCards.OrderByDescending(pc => pc.SequenceNumber).FirstOrDefault();
-        if (lastPlayed is not null)
-        {
-            var hasReflection = await _dbContext.Reflections.AnyAsync(r => r.PlayedCardId == lastPlayed.Id, ct);
-            if (!hasReflection)
-                return BadRequest("Write a reflection before continuing the journey.");
-        }
+        // TODO: re-enable once UI testing is done — require a reflection before rolling again.
+        // if (lastPlayed is not null)
+        // {
+        //     var hasReflection = await _dbContext.Reflections.AnyAsync(r => r.PlayedCardId == lastPlayed.Id, ct);
+        //     if (!hasReflection)
+        //         return BadRequest("Write a reflection before continuing the journey.");
+        // }
 
         var cards = await _dbContext.Cards.AsNoTracking().ToListAsync(ct);
 
         var currentPosition = lastPlayed is null
             ? 0
             : cards.Single(c => c.Id == lastPlayed.CardId).BoardPosition;
+
+        if (currentPosition >= cards.Count - 1)
+            return BadRequest("You've reached the end of the board. Complete your journey to finish.");
 
         var diceResult = _diceService.Roll();
         var selection = _cardSelectionService.SelectNext(currentPosition, diceResult, cards);
