@@ -30,15 +30,27 @@ public class CardSelectionServiceTests
     }
 
     [Fact]
-    public void SelectNext_WrapsAroundTheBoard()
+    public void SelectNext_ClampsAtTheLastCellInsteadOfWrapping()
     {
         var service = new CardSelectionService();
         var board = SixPositionBoard();
 
         var result = service.SelectNext(currentPosition: 4, diceResult: 3, board);
 
-        Assert.Equal(1, result.Position); // (4 + 3) % 6 == 1
-        Assert.Equal("B", result.Card.Title);
+        Assert.Equal(5, result.Position); // min(4 + 3, 6 - 1) == 5, the last cell
+        Assert.Equal("F", result.Card.Title);
+    }
+
+    [Fact]
+    public void SelectNext_LandsExactlyOnTheLastCellWhenTheRollMatches()
+    {
+        var service = new CardSelectionService();
+        var board = SixPositionBoard();
+
+        var result = service.SelectNext(currentPosition: 3, diceResult: 2, board);
+
+        Assert.Equal(5, result.Position);
+        Assert.Equal("F", result.Card.Title);
     }
 
     [Fact]
