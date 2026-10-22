@@ -17,7 +17,7 @@ public class CardSelectionService : ICardSelectionService
             throw new InvalidOperationException("No cards configured for the board.");
 
         var boardSize = availableCards.Count;
-        var newPosition = (currentPosition + diceResult) % boardSize;
+        var newPosition = Math.Min(currentPosition + diceResult, boardSize - 1);
 
         var card = availableCards.SingleOrDefault(c => c.BoardPosition == newPosition)
             ?? throw new InvalidOperationException($"No card configured for board position {newPosition}.");
